@@ -1,0 +1,40 @@
+# GerLauNR10 - .gitignore
+
+# Banco de dados local (dados dos clientes não vão para o repo)
+data/
+*.db
+*.db-journal
+
+# Pastas de clientes (dados dos laudos)
+Clientes/
+
+# Build
+dist/
+build/
+*.spec
+Output/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
