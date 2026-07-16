@@ -3,12 +3,23 @@ GerLauNR10 - Módulo de banco de dados SQLite
 """
 import sqlite3
 import os
+import sys
 import json
 from pathlib import Path
 from datetime import datetime
 
 BASE_DIR = Path(__file__).parent
-DB_PATH = BASE_DIR / "data" / "gerlaunr10.db"
+
+if getattr(sys, "frozen", False):
+    # Rodando como executavel compilado (PyInstaller): a pasta de instalacao
+    # (ex.: C:\Program Files (x86)\GerLauNR10) costuma ser somente leitura
+    # para usuarios sem privilegio de administrador, entao os dados do
+    # aplicativo (banco SQLite) ficam numa pasta gravavel do usuario.
+    _DATA_ROOT = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "GerLauNR10"
+else:
+    _DATA_ROOT = BASE_DIR
+
+DB_PATH = _DATA_ROOT / "data" / "gerlaunr10.db"
 
 # ---------------------------------------------------------------------------
 # Dados padrão do checklist (10 itens NR-10)

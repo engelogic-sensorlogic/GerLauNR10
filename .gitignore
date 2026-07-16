@@ -12,6 +12,7 @@ Clientes/
 dist/
 build/
 *.spec
+*.iss
 Output/
 
 # Python

@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QStatusBar, QSizePolicy
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
-from PyQt6.QtGui import QPixmap, QIcon, QFont
+from PyQt6.QtGui import QPixmap, QIcon, QFont, QImage
 
 from ui.clientes_widget import ClientesWidget
 from ui.laudos_widget import LaudosWidget
@@ -17,6 +17,19 @@ from ui.pdf_widget import PDFWidget
 from ui.configuracoes_widget import ConfiguracoesWidget
 from ui.devtools_widget import DevToolsWidget
 from styles import COLORS
+
+
+def _make_white_bg_transparent(pix: QPixmap, threshold: int = 245) -> QPixmap:
+    """Retorna uma copia do pixmap com pixels quase-brancos tornados transparentes,
+    sem alterar o arquivo de imagem original."""
+    img = pix.toImage().convertToFormat(QImage.Format.Format_ARGB32)
+    for y in range(img.height()):
+        for x in range(img.width()):
+            color = img.pixelColor(x, y)
+            if color.red() >= threshold and color.green() >= threshold and color.blue() >= threshold:
+                color.setAlpha(0)
+                img.setPixelColor(x, y, color)
+    return QPixmap.fromImage(img)
 
 
 # ---------------------------------------------------------------------------
@@ -86,17 +99,13 @@ class MainWindow(QMainWindow):
         lbl_img.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         if os.path.exists(logo_path):
             pix = QPixmap(logo_path)
+            pix = _make_white_bg_transparent(pix)
             pix = pix.scaled(180, 52, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             lbl_img.setPixmap(pix)
         else:
             lbl_img.setText("ENGELOGIC")
             lbl_img.setObjectName("app_title")
         logo_layout.addWidget(lbl_img)
-
-        sub_lbl = QLabel("NR-10  •  Laudos Elétricos")
-        sub_lbl.setObjectName("app_subtitle")
-        sub_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo_layout.addWidget(sub_lbl)
         sb_layout.addWidget(logo_frame)
 
         # Separador
@@ -166,6 +175,10 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(index)
         for i, btn in enumerate(self._nav_buttons):
             btn.set_active(i == index)
+        if index == 1:
+            # Recarrega os paineis do laudo atual, pois o nivel de aderencia
+            # pode ter mudado ao preencher uma avaliacao em outra tela.
+            self.w_laudos._load_paineis()
 
     def _on_open_laudos(self, cliente_id: int, cliente_nome: str):
         self.w_laudos.set_cliente(cliente_id, cliente_nome)

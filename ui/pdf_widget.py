@@ -39,6 +39,13 @@ class PDFThread(QThread):
                 progress_cb=lambda p, msg: self.progress.emit(p, msg)
             )
             self.finished.emit(self.output_path)
+        except PermissionError:
+            nome = os.path.basename(self.output_path)
+            self.error.emit(
+                f"Não foi possível salvar o arquivo \"{nome}\".\n\n"
+                "Ele está aberto em outro programa (Adobe Acrobat, leitor de PDF, etc.). "
+                "Feche o arquivo e tente gerar o relatório novamente."
+            )
         except Exception as e:
             import traceback
             self.error.emit(f"{str(e)}\n\n{traceback.format_exc()}")
@@ -97,13 +104,10 @@ class PDFWidget(QWidget):
 
         # ── Seletor de laudo ──────────────────────────────────────────────────
         sel_frame = QFrame()
-        sel_frame.setStyleSheet(
-            "background:#ffffff; border:1px solid #e8820c;"
-            "border-left:4px solid #e8820c; border-radius:6px;"
-        )
+        sel_frame.setObjectName("card")
         sel_layout = QHBoxLayout(sel_frame)
-        sel_layout.setContentsMargins(12, 8, 12, 8)
-        sel_layout.setSpacing(8)
+        sel_layout.setContentsMargins(14, 10, 14, 10)
+        sel_layout.setSpacing(10)
 
         # Logo do cliente (atualizado quando laudo é selecionado)
         self.lbl_logo_cli = QLabel()
@@ -111,21 +115,23 @@ class PDFWidget(QWidget):
         self.lbl_logo_cli.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_logo_cli.setText("LOGO")
         self.lbl_logo_cli.setStyleSheet(
-            "color:#586069; font-size:9px; font-weight:bold;"
-            "border:1px dashed #c8d0d8; border-radius:4px; background:#f0f4f8;"
+            "color:#8a9bb0; font-size:9px; font-weight:bold;"
+            "border:1px solid #e1e6ec; border-radius:4px; background:#f7f9fb;"
         )
         sel_layout.addWidget(self.lbl_logo_cli)
 
         sel_lbl = QLabel("Laudo:")
-        sel_lbl.setStyleSheet("font-weight:bold; color:#1a1a1a; min-width:52px;")
+        sel_lbl.setStyleSheet(
+            "font-weight:bold; color:#1a1a1a; min-width:52px; border:none; background:transparent;"
+        )
         self.combo_laudo = QComboBox()
-        self.combo_laudo.setMinimumHeight(34)
+        self.combo_laudo.setFixedHeight(40)
         self.combo_laudo.addItem("— Selecione um laudo —", None)
         self.combo_laudo.currentIndexChanged.connect(self._on_combo_changed)
 
         btn_refresh = QPushButton("⟳")
         btn_refresh.setObjectName("btn_secondary")
-        btn_refresh.setFixedSize(34, 34)
+        btn_refresh.setFixedSize(40, 40)
         btn_refresh.setStyleSheet(
             "font-size:18px; font-weight:bold; padding:0; border-radius:4px;"
         )

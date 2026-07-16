@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QGroupBox, QGridLayout
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QDate
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtGui import QColor, QFont, QPixmap
 
 import database as db
 from styles import COLORS, nivel_cor, nivel_label
@@ -306,10 +306,11 @@ class PainelDialog(QDialog):
             lbl = QLabel("Nenhuma foto selecionada")
             lbl.setStyleSheet(
                 "color: #8a9bb0; font-size: 10px; border: 1px dashed #c8d0d8;"
-                "border-radius: 4px; padding: 6px; min-height: 32px;"
+                "border-radius: 4px; padding: 6px;"
             )
             lbl.setWordWrap(True)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl.setFixedHeight(100)
             self._foto_labels[key] = lbl
             grp_lay.addWidget(lbl)
 
@@ -351,19 +352,33 @@ class PainelDialog(QDialog):
         )
         if path:
             self._foto_paths[key] = path
-            import os
-            self._foto_labels[key].setText(os.path.basename(path))
-            self._foto_labels[key].setStyleSheet(
-                "color: #1a7f37; font-size: 10px; border: 1px solid #1a7f37;"
-                "border-radius: 4px; padding: 6px; min-height: 32px;"
-            )
+            self._set_foto_preview(key, path)
+
+    def _set_foto_preview(self, key: str, path: str):
+        lbl = self._foto_labels[key]
+        pix = QPixmap(path)
+        if pix.isNull():
+            self._clear_foto(key)
+            return
+        scaled = pix.scaled(
+            160, 100, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+        )
+        lbl.setPixmap(scaled)
+        lbl.setText("")
+        lbl.setToolTip(path)
+        lbl.setStyleSheet(
+            "border: 1px solid #1a7f37; border-radius: 4px; padding: 4px;"
+        )
 
     def _clear_foto(self, key: str):
         self._foto_paths[key] = ""
-        self._foto_labels[key].setText("Nenhuma foto selecionada")
-        self._foto_labels[key].setStyleSheet(
+        lbl = self._foto_labels[key]
+        lbl.setPixmap(QPixmap())
+        lbl.setText("Nenhuma foto selecionada")
+        lbl.setToolTip("")
+        lbl.setStyleSheet(
             "color: #8a9bb0; font-size: 10px; border: 1px dashed #c8d0d8;"
-            "border-radius: 4px; padding: 6px; min-height: 32px;"
+            "border-radius: 4px; padding: 6px;"
         )
 
     def _fill_fields(self):
@@ -387,17 +402,12 @@ class PainelDialog(QDialog):
                 pass
         # Carrega fotos existentes (edição)
         if d.get("id"):
-            import os
             fotos = db.buscar_fotos_identificacao(d["id"])
             for key in self._foto_paths:
                 p = fotos.get(key, "")
                 if p:
                     self._foto_paths[key] = p
-                    self._foto_labels[key].setText(os.path.basename(p))
-                    self._foto_labels[key].setStyleSheet(
-                        "color: #1a7f37; font-size: 10px; border: 1px solid #1a7f37;"
-                        "border-radius: 4px; padding: 6px; min-height: 32px;"
-                    )
+                    self._set_foto_preview(key, p)
 
     def _save(self):
         tag = self.e_tag.text().strip()

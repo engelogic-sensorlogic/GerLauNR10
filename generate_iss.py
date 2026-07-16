@@ -39,11 +39,10 @@ AllowNoIcons=yes
 LicenseFile=
 OutputDir=Output
 OutputBaseFilename=GerLauNR10_Setup_v{APP_VERSION}
-SetupIconFile=resources\\icon.ico
+SetupIconFile=Icone.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
-WizardSmallImageFile=resources\\icon.ico
 PrivilegesRequiredOverridesAllowed=dialog
 VersionInfoVersion={APP_VERSION}
 VersionInfoCompany={APP_PUBLISHER}
@@ -58,12 +57,13 @@ Name: "quicklaunchicon"; Description: "Criar ícone na Barra de Tarefas"; GroupD
 
 [Files]
 Source: "{DIST_DIR}\\*"; DestDir: "{{app}}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "Icone.ico"; DestDir: "{{app}}"; Flags: ignoreversion
 
 [Icons]
-Name: "{{group}}\\{{#MyAppName}}"; Filename: "{{app}}\\{{#MyAppExeName}}"
+Name: "{{group}}\\{{#MyAppName}}"; Filename: "{{app}}\\{{#MyAppExeName}}"; IconFilename: "{{app}}\\Icone.ico"
 Name: "{{group}}\\Desinstalar {{#MyAppName}}"; Filename: "{{uninstallexe}}"
-Name: "{{commondesktop}}\\{{#MyAppName}}"; Filename: "{{app}}\\{{#MyAppExeName}}"; Tasks: desktopicon
-Name: "{{userappdata}}\\Microsoft\\Internet Explorer\\Quick Launch\\{{#MyAppName}}"; Filename: "{{app}}\\{{#MyAppExeName}}"; Tasks: quicklaunchicon
+Name: "{{commondesktop}}\\{{#MyAppName}}"; Filename: "{{app}}\\{{#MyAppExeName}}"; IconFilename: "{{app}}\\Icone.ico"; Tasks: desktopicon
+Name: "{{userappdata}}\\Microsoft\\Internet Explorer\\Quick Launch\\{{#MyAppName}}"; Filename: "{{app}}\\{{#MyAppExeName}}"; IconFilename: "{{app}}\\Icone.ico"; Tasks: quicklaunchicon
 
 [Run]
 Filename: "{{app}}\\{{#MyAppExeName}}"; Description: "Abrir {{#MyAppName}}"; Flags: nowait postinstall skipifsilent

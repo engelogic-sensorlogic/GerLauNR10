@@ -4,7 +4,7 @@ Otimizado para uso em tablet e desktop
 """
 import os
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton,
     QScrollArea, QFrame, QTextEdit, QButtonGroup, QRadioButton,
     QFileDialog, QMessageBox, QProgressBar
 )
