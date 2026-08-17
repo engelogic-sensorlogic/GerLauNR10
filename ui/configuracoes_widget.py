@@ -12,7 +12,32 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 import database as db
-from styles import COLORS
+from styles import (
+    COLORS, ACAO_SPACING, ACAO_LINHA, ACAO_ALTURA, ACAO_LARGURA,
+    largura_coluna_acoes_texto
+)
+
+
+def _celula(texto: str, tooltip: str = None) -> QTableWidgetItem:
+    """Celula de tabela que mostra o conteudo completo no tooltip.
+
+    As colunas de texto sao estreitas demais para nomes de habilitacao e
+    e-mails; sem o tooltip o final do conteudo ficava inacessivel.
+    """
+    item = QTableWidgetItem(texto)
+    if texto or tooltip:
+        item.setToolTip(tooltip if tooltip is not None else texto)
+    return item
+
+
+def _botao_acao(texto: str, object_name: str) -> QPushButton:
+    """Botao compacto para a coluna 'Acoes'. Sem tamanho fixo, o padding e o
+    min-width herdados de btn_icon cortavam o rotulo dentro da celula."""
+    b = QPushButton(texto)
+    b.setObjectName(object_name)
+    b.setFixedSize(ACAO_LARGURA, ACAO_ALTURA)
+    b.setCursor(Qt.CursorShape.PointingHandCursor)
+    return b
 
 
 # ---------------------------------------------------------------------------
@@ -100,8 +125,8 @@ class ChecklistItemDialog(QDialog):
         super().__init__(parent)
         self.dados = dados or {}
         self.setWindowTitle("Item do Checklist")
-        self.setMinimumWidth(620)
-        self.setMinimumHeight(500)
+        self.setMinimumWidth(980)
+        self.setMinimumHeight(560)
         self.setModal(True)
         self._build_ui()
 
@@ -140,21 +165,34 @@ class ChecklistItemDialog(QDialog):
         grp = QGroupBox("Opções de Resposta (e seus pesos)")
         grp_layout = QVBoxLayout(grp)
 
-        info = QLabel("Peso: 1.0 = Conforme | 0.5 = Parcial | 0.0 = Não conforme | (vazio) = Não avaliado (excluído do cálculo)")
+        info = QLabel(
+            "Peso: 1.0 = Conforme | 0.5 = Parcial | 0.0 = Não conforme | (vazio) = Não avaliado (excluído do cálculo). "
+            "Observação Padrão e Ação Corretiva Padrão são carregadas automaticamente nos campos de avaliação do painel "
+            "quando o usuário seleciona essa resposta (e podem ser editadas por ele depois)."
+        )
         info.setStyleSheet("color: #586069; font-size: 10px;")
         info.setWordWrap(True)
         grp_layout.addWidget(info)
 
-        self.opcoes_table = QTableWidget(0, 2)
-        self.opcoes_table.setHorizontalHeaderLabels(["Descrição da Resposta", "Peso (0.0 a 1.0)"])
-        self.opcoes_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.opcoes_table = QTableWidget(0, 4)
+        self.opcoes_table.setHorizontalHeaderLabels([
+            "Descrição da Resposta", "Peso (0.0 a 1.0)", "Observação Padrão", "Ação Corretiva Padrão"
+        ])
+        self.opcoes_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
         self.opcoes_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
-        self.opcoes_table.setColumnWidth(1, 130)
+        self.opcoes_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.opcoes_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.opcoes_table.setColumnWidth(0, 200)
+        self.opcoes_table.setColumnWidth(1, 90)
+        self.opcoes_table.verticalHeader().setDefaultSectionSize(40)
         grp_layout.addWidget(self.opcoes_table)
 
         # Preenche opções existentes
         for opc in self.dados.get("opcoes", []):
-            self._add_opcao_row(opc.get("descricao", ""), opc.get("peso"))
+            self._add_opcao_row(
+                opc.get("descricao", ""), opc.get("peso"),
+                opc.get("observacao_padrao", ""), opc.get("acao_corretiva_padrao", ""),
+            )
 
         opc_btns = QHBoxLayout()
         btn_add_opc = QPushButton("+ Adicionar Opção")
@@ -181,12 +219,14 @@ class ChecklistItemDialog(QDialog):
         btn_row.addWidget(btn_save)
         layout.addLayout(btn_row)
 
-    def _add_opcao_row(self, descricao: str = "", peso=None):
+    def _add_opcao_row(self, descricao: str = "", peso=None, obs_padrao: str = "", ac_padrao: str = ""):
         row = self.opcoes_table.rowCount()
         self.opcoes_table.insertRow(row)
         self.opcoes_table.setItem(row, 0, QTableWidgetItem(descricao))
         peso_item = QTableWidgetItem("" if peso is None else str(peso))
         self.opcoes_table.setItem(row, 1, peso_item)
+        self.opcoes_table.setItem(row, 2, QTableWidgetItem(obs_padrao or ""))
+        self.opcoes_table.setItem(row, 3, QTableWidgetItem(ac_padrao or ""))
 
     def _del_opcao_row(self):
         row = self.opcoes_table.currentRow()
@@ -202,12 +242,17 @@ class ChecklistItemDialog(QDialog):
         for r in range(self.opcoes_table.rowCount()):
             desc = (self.opcoes_table.item(r, 0) or QTableWidgetItem()).text().strip()
             peso_txt = (self.opcoes_table.item(r, 1) or QTableWidgetItem()).text().strip()
+            obs_padrao = (self.opcoes_table.item(r, 2) or QTableWidgetItem()).text().strip()
+            ac_padrao = (self.opcoes_table.item(r, 3) or QTableWidgetItem()).text().strip()
             if desc:
                 try:
                     peso = float(peso_txt) if peso_txt else None
                 except ValueError:
                     peso = None
-                opcoes.append({"descricao": desc, "peso": peso})
+                opcoes.append({
+                    "descricao": desc, "peso": peso,
+                    "observacao_padrao": obs_padrao, "acao_corretiva_padrao": ac_padrao,
+                })
         self.result_data = {
             "id": self.dados.get("id"),
             "numero": self.e_numero.value(),
@@ -253,8 +298,24 @@ class ConfiguracoesWidget(QWidget):
 
         self.table_prof = QTableWidget(0, 6)
         self.table_prof.setHorizontalHeaderLabels(["Nome", "Empresa", "Habilitação", "CREA", "E-mail", "Ações"])
-        self.table_prof.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.table_prof.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        # Nome/Habilitacao/E-mail com largura propria e Empresa absorvendo a
+        # sobra: com todas em Stretch o Qt dividia igualmente e "Habilitacao"
+        # e "E-mail" ficavam com ~100px, cortando o conteudo cedo demais.
+        _ph = self.table_prof.horizontalHeader()
+        # Piso por coluna: sem ele, na largura minima da janela as colunas
+        # Stretch encolhiam para ~80px e ficavam ilegiveis. Preferimos a barra
+        # de rolagem horizontal, que so aparece em janelas estreitas.
+        _ph.setMinimumSectionSize(110)
+        _ph.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
+        _ph.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        _ph.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        _ph.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        _ph.setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
+        _ph.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        self.table_prof.setColumnWidth(0, 150)
+        self.table_prof.setColumnWidth(4, 190)
+        self.table_prof.setColumnWidth(5, largura_coluna_acoes_texto(2))
+        self.table_prof.verticalHeader().setDefaultSectionSize(ACAO_LINHA)
         self.table_prof.setAlternatingRowColors(True)
         self.table_prof.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         prof_layout.addWidget(self.table_prof)
@@ -283,12 +344,27 @@ class ConfiguracoesWidget(QWidget):
 
         self.table_items = QTableWidget(0, 4)
         self.table_items.setHorizontalHeaderLabels(["Nº", "Questão", "Opções", "Ações"])
-        self.table_items.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        _ih = self.table_items.horizontalHeader()
+        _ih.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        _ih.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        _ih.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+        _ih.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        self.table_items.setColumnWidth(2, 280)
+        self.table_items.setColumnWidth(3, largura_coluna_acoes_texto(1))
         self.table_items.setAlternatingRowColors(True)
         self.table_items.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table_items.verticalHeader().setDefaultSectionSize(44)
+        self.table_items.verticalHeader().setDefaultSectionSize(ACAO_LINHA)
         check_layout.addWidget(self.table_items)
         tabs.addTab(check_tab, "✅  Checklist")
+
+        # ---- Tab: Backup ----
+        from ui.backup_widget import BackupWidget
+        self.w_backup = BackupWidget()
+        tabs.addTab(self.w_backup, "💾  Backup")
+        # Recarrega as listas de clientes/laudos ao entrar na aba: elas podem
+        # ter mudado em outra tela desde que a janela foi aberta.
+        tabs.currentChanged.connect(
+            lambda i: self.w_backup.recarregar() if tabs.widget(i) is self.w_backup else None)
 
         layout.addWidget(tabs)
 
@@ -302,16 +378,16 @@ class ConfiguracoesWidget(QWidget):
             row = self.table_prof.rowCount()
             self.table_prof.insertRow(row)
             for col, key in enumerate(["nome", "empresa", "habilitacao", "crea", "email"]):
-                self.table_prof.setItem(row, col, QTableWidgetItem(p.get(key, "") or ""))
+                self.table_prof.setItem(row, col, _celula(p.get(key, "") or ""))
 
             cell = QWidget()
             cl = QHBoxLayout(cell)
-            cl.setContentsMargins(4, 2, 4, 2)
-            btn_e = QPushButton("Editar")
-            btn_e.setObjectName("btn_icon")
+            cl.setContentsMargins(6, 0, 6, 0)
+            cl.setSpacing(ACAO_SPACING)
+            cl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            btn_e = _botao_acao("Editar", "btn_table_action")
             btn_e.clicked.connect(lambda _, pd=p: self._edit_profissional(pd))
-            btn_d = QPushButton("Excluir")
-            btn_d.setObjectName("btn_icon")
+            btn_d = _botao_acao("Excluir", "btn_table_action_danger")
             btn_d.clicked.connect(lambda _, pid=p["id"]: self._del_profissional(pid))
             cl.addWidget(btn_e)
             cl.addWidget(btn_d)
@@ -324,21 +400,22 @@ class ConfiguracoesWidget(QWidget):
             row = self.table_items.rowCount()
             self.table_items.insertRow(row)
             self.table_items.setItem(row, 0, QTableWidgetItem(str(item["numero"])))
-            q = item["questao"]
-            self.table_items.setItem(row, 1, QTableWidgetItem(q[:70] + "..." if len(q) > 70 else q))
-            opc_txt = ", ".join(o["descricao"] for o in item["opcoes"][:3])
-            if len(item["opcoes"]) > 3:
-                opc_txt += "..."
-            self.table_items.setItem(row, 2, QTableWidgetItem(opc_txt))
+            # Texto integral na celula: o corte fixo em 70 caracteres cortava
+            # cedo mesmo com a coluna larga. O Qt aplica a elipse conforme a
+            # largura real e o tooltip guarda o conteudo completo.
+            self.table_items.setItem(row, 1, _celula(item["questao"]))
+            opcoes = [o["descricao"] for o in item["opcoes"]]
+            self.table_items.setItem(row, 2, _celula(", ".join(opcoes),
+                                                     "\n".join("• " + o for o in opcoes)))
 
             cell = QWidget()
             cl = QHBoxLayout(cell)
-            cl.setContentsMargins(4, 2, 4, 2)
-            btn_e = QPushButton("Editar")
-            btn_e.setObjectName("btn_secondary")
+            cl.setContentsMargins(6, 0, 6, 0)
+            cl.setSpacing(ACAO_SPACING)
+            cl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            btn_e = _botao_acao("Editar", "btn_table_action")
             btn_e.clicked.connect(lambda _, d=item: self._edit_item(d))
             cl.addWidget(btn_e)
-            cl.addStretch()
             self.table_items.setCellWidget(row, 3, cell)
 
     def _new_profissional(self):

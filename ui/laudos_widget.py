@@ -662,8 +662,7 @@ class LaudosWidget(QWidget):
             lid = db.salvar_laudo(dlg.result_data)
             for pid in dlg.prof_ids_selecionados:
                 db.vincular_profissional_laudo(lid, pid)
-            for part in db.listar_participantes(self._cliente_id):
-                db.vincular_participante_laudo(lid, part["id"])
+            db.sincronizar_participantes_laudo(lid)
             self._load_laudos()
 
     def _edit_laudo(self):
@@ -678,6 +677,7 @@ class LaudosWidget(QWidget):
                 db.desvincular_profissional_laudo(dados["id"], p["id"])
             for pid in dlg.prof_ids_selecionados:
                 db.vincular_profissional_laudo(dados["id"], pid)
+            db.sincronizar_participantes_laudo(dados["id"])
             self._load_laudos()
 
     def _delete_laudo(self):

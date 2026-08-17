@@ -11,7 +11,9 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QPixmap, QIcon
 
 import database as db
-from styles import COLORS
+from styles import (
+    COLORS, ACAO_BTN, ACAO_ICON, ACAO_SPACING, ACAO_LINHA, largura_coluna_acoes
+)
 
 
 # ---------------------------------------------------------------------------
@@ -305,11 +307,11 @@ class ClientesWidget(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        self.table.setColumnWidth(5, 160)
+        self.table.setColumnWidth(5, largura_coluna_acoes(4))
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setDefaultSectionSize(44)
+        self.table.verticalHeader().setDefaultSectionSize(ACAO_LINHA)
         layout.addWidget(self.table)
 
     def refresh(self):
@@ -328,48 +330,36 @@ class ClientesWidget(QWidget):
             # Coluna de ações
             cell = QWidget()
             cell_layout = QHBoxLayout(cell)
-            cell_layout.setContentsMargins(4, 2, 4, 2)
-            cell_layout.setSpacing(4)
+            cell_layout.setContentsMargins(6, 0, 6, 0)
+            cell_layout.setSpacing(ACAO_SPACING)
+            cell_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             sty = self.style()
-            icon_sz = QSize(16, 16)
 
-            # Laudos – ícone de documento/lista
-            btn_laudos = QPushButton(sty.standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView), "")
-            btn_laudos.setIconSize(icon_sz)
-            btn_laudos.setObjectName("btn_icon")
-            btn_laudos.setToolTip("Abrir Laudos deste Cliente")
-            btn_laudos.clicked.connect(lambda _, cid=c["id"], cn=c["razao_social"]: self.open_laudos.emit(cid, cn))
+            def _icon_btn(pixmap, tooltip, slot):
+                b = QPushButton(sty.standardIcon(pixmap), "")
+                b.setObjectName("btn_table_icon")
+                b.setFixedSize(ACAO_BTN, ACAO_BTN)
+                b.setIconSize(QSize(ACAO_ICON, ACAO_ICON))
+                b.setCursor(Qt.CursorShape.PointingHandCursor)
+                b.setToolTip(tooltip)
+                b.clicked.connect(slot)
+                cell_layout.addWidget(b)
 
-            # Participantes – ícone de informação/pessoas
-            btn_parts = QPushButton(sty.standardIcon(QStyle.StandardPixmap.SP_MessageBoxInformation), "")
-            btn_parts.setIconSize(icon_sz)
-            btn_parts.setObjectName("btn_icon")
-            btn_parts.setToolTip("Gerenciar Participantes / Fornecedores de Informação")
-            btn_parts.clicked.connect(lambda _, cid=c["id"]: self._manage_participantes(cid))
+            cid, cnome = c["id"], c["razao_social"]
+            _icon_btn(QStyle.StandardPixmap.SP_FileDialogDetailedView,
+                      "Abrir Laudos deste Cliente",
+                      lambda _, i=cid, n=cnome: self.open_laudos.emit(i, n))
+            _icon_btn(QStyle.StandardPixmap.SP_MessageBoxInformation,
+                      "Gerenciar Participantes / Fornecedores de Informação",
+                      lambda _, i=cid: self._manage_participantes(i))
+            _icon_btn(QStyle.StandardPixmap.SP_FileDialogNewFolder,
+                      "Editar cliente",
+                      lambda _, cd=c: self._edit_cliente(cd))
+            _icon_btn(QStyle.StandardPixmap.SP_TrashIcon,
+                      "Excluir cliente",
+                      lambda _, i=cid, n=cnome: self._delete_cliente(i, n))
 
-            # Editar – ícone de lápis (FileDialogNewFolder aproximado)
-            btn_edit = QPushButton(
-                sty.standardIcon(QStyle.StandardPixmap.SP_FileDialogNewFolder), ""
-            )
-            btn_edit.setIconSize(icon_sz)
-            btn_edit.setObjectName("btn_icon")
-            btn_edit.setToolTip("Editar cliente")
-            btn_edit.clicked.connect(lambda _, cd=c: self._edit_cliente(cd))
-
-            # Excluir – ícone de lixeira
-            btn_del = QPushButton(
-                sty.standardIcon(QStyle.StandardPixmap.SP_TrashIcon), ""
-            )
-            btn_del.setIconSize(icon_sz)
-            btn_del.setObjectName("btn_icon")
-            btn_del.setToolTip("Excluir cliente")
-            btn_del.clicked.connect(lambda _, cid=c["id"], cn=c["razao_social"]: self._delete_cliente(cid, cn))
-
-            cell_layout.addWidget(btn_laudos)
-            cell_layout.addWidget(btn_parts)
-            cell_layout.addWidget(btn_edit)
-            cell_layout.addWidget(btn_del)
             self.table.setCellWidget(row, 5, cell)
 
     def _new_cliente(self):

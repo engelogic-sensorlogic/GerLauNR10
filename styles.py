@@ -77,8 +77,14 @@ QMainWindow {
     max-width: 220px;
 }
 
+/* Area do logo em branco: o PNG da marca tem fundo branco e elementos escuros
+   ("Logic" e a assinatura sao cinza 81,79,79). Sobre o preto da sidebar esses
+   elementos sumiam, e o tratamento antigo de transparencia so os mantinha
+   visiveis por causa do halo cinza que deixava nas bordas -- dai o aspecto
+   borrado. Com o fundo branco o logo aparece como a marca e, sem tratamento
+   nenhum e com definicao total. */
 #sidebar_logo {
-    background-color: #111111;
+    background-color: #ffffff;
     padding: 0px;
     border-bottom: 2px solid #e8820c;
 }
@@ -298,6 +304,66 @@ QPushButton#btn_icon {
 QPushButton#btn_icon:hover {
     background-color: #e2e8f0;
     color: #1a2332;
+}
+
+/* Botoes da coluna "Acoes" das tabelas.
+   O padding e o min-width de btn_icon inflavam o botao dentro da celula: o
+   icone ficava pequeno no meio de um botao alto demais e o ultimo botao
+   estourava a largura da coluna. Aqui o tamanho vem do setFixedSize do widget,
+   entao padding e minimos precisam ser zerados. */
+QPushButton#btn_table_icon {
+    background-color: transparent;
+    border: 1px solid #c8d0d8;
+    color: #586069;
+    padding: 0px;
+    margin: 0px;
+    min-width: 0px;
+    min-height: 0px;
+    border-radius: 4px;
+}
+
+QPushButton#btn_table_icon:hover {
+    background-color: #e2e8f0;
+    border-color: #8a9bb0;
+    color: #1a2332;
+}
+
+QPushButton#btn_table_icon:pressed {
+    background-color: #d7dee7;
+}
+
+QPushButton#btn_table_action {
+    background-color: #f0f4f8;
+    border: 1px solid #c8d0d8;
+    color: #1a2332;
+    padding: 0px 10px;
+    margin: 0px;
+    min-width: 0px;
+    min-height: 0px;
+    font-size: 11px;
+    border-radius: 4px;
+}
+
+QPushButton#btn_table_action:hover {
+    background-color: #e2e8f0;
+    border-color: #8a9bb0;
+}
+
+QPushButton#btn_table_action_danger {
+    background-color: #fdeaea;
+    border: 1px solid #e8b4b4;
+    color: #b91c1c;
+    padding: 0px 10px;
+    margin: 0px;
+    min-width: 0px;
+    min-height: 0px;
+    font-size: 11px;
+    border-radius: 4px;
+}
+
+QPushButton#btn_table_action_danger:hover {
+    background-color: #f9d5d5;
+    border-color: #d78e8e;
 }
 
 /* ===== TABLES ===== */
@@ -538,3 +604,26 @@ QSpinBox:focus, QDoubleSpinBox:focus {
     border: 2px solid #e8820c;
 }
 """
+
+
+# ---------------------------------------------------------------------------
+# Dimensoes da coluna "Acoes" das tabelas
+# ---------------------------------------------------------------------------
+# A largura da coluna e derivada destas constantes, para que os botoes nunca
+# fiquem espremidos nem estourem a celula.
+ACAO_BTN     = 30    # lado do botao quadrado de icone
+ACAO_ICON    = 18    # icone dentro do botao
+ACAO_SPACING = 6     # espaco entre botoes
+ACAO_LINHA   = 44    # altura da linha da tabela
+ACAO_ALTURA  = 26    # altura dos botoes de texto
+ACAO_LARGURA = 72    # largura dos botoes de texto
+
+
+def largura_coluna_acoes(n_botoes: int) -> int:
+    """Largura exata para n botoes de icone, incluindo espacos e margens."""
+    return n_botoes * ACAO_BTN + (n_botoes - 1) * ACAO_SPACING + 12
+
+
+def largura_coluna_acoes_texto(n_botoes: int) -> int:
+    """Largura exata para n botoes de texto, incluindo espacos e margens."""
+    return n_botoes * ACAO_LARGURA + (n_botoes - 1) * ACAO_SPACING + 12

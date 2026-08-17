@@ -117,9 +117,11 @@ class ItemCard(QFrame):
         self.item_num = item["numero"]
         self.painel_id = painel_id
         self._fotos = []
+        self._suppress_autofill = True  # evita sobrescrever avaliacao ja salva ao abrir a tela
         self.setObjectName("card")
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self._build_ui(avaliacao or {})
+        self._suppress_autofill = False
         if painel_id:
             self._load_fotos()
 
@@ -188,6 +190,7 @@ class ItemCard(QFrame):
         self.btn_group = QButtonGroup(self)
         self._opcao_ids  = {}
         self._opcao_pesos = {}
+        self._opcao_textos = {}
 
         opcoes_layout = QGridLayout()
         opcoes_layout.setSpacing(5)
@@ -213,6 +216,10 @@ class ItemCard(QFrame):
             self.btn_group.addButton(rb, i)
             self._opcao_ids[i]   = opc["id"]
             self._opcao_pesos[i] = opc.get("peso")
+            self._opcao_textos[i] = (
+                opc.get("observacao_padrao") or "",
+                opc.get("acao_corretiva_padrao") or "",
+            )
             opcoes_layout.addWidget(rb, i // cols, i % cols)
 
         body_layout.addLayout(opcoes_layout)
@@ -342,6 +349,10 @@ class ItemCard(QFrame):
                 self.score_lbl.setStyleSheet(
                     f"color: {cor}; font-size: 12px; font-weight: bold; background: transparent;"
                 )
+            if not self._suppress_autofill:
+                obs_padrao, ac_padrao = self._opcao_textos.get(idx, ("", ""))
+                self.obs_edit.setPlainText(obs_padrao)
+                self.ac_edit.setPlainText(ac_padrao)
         self.changed.emit()
 
     def get_data(self) -> dict:
@@ -400,8 +411,13 @@ class PainelWidget(QWidget):
 
         # ── HEADER: preto + laranja ────────────────────────────────────────
         header_frame = QFrame()
+        header_frame.setObjectName("painel_header")
+        # Seletor por objectName: sem ele a regra desce para todos os filhos e o
+        # border-bottom vira um sublinhado solto sob cada label, alem de apagar o
+        # estilo do botao "Salvar Avaliacao".
         header_frame.setStyleSheet(
-            f"background: {C_BLACK}; border-bottom: 3px solid {C_ORANGE};"
+            f"QFrame#painel_header {{ background: {C_BLACK};"
+            f" border-bottom: 3px solid {C_ORANGE}; }}"
         )
         header_layout = QHBoxLayout(header_frame)
         header_layout.setContentsMargins(24, 14, 24, 14)
@@ -427,9 +443,10 @@ class PainelWidget(QWidget):
 
         # Nível de aderência – widget preto/laranja limpo
         nivel_frame = QFrame()
+        nivel_frame.setObjectName("nivel_frame")
         nivel_frame.setStyleSheet(
-            f"background: {C_DARK}; border: 2px solid {C_ORANGE};"
-            "border-radius: 8px;"
+            f"QFrame#nivel_frame {{ background: {C_DARK};"
+            f" border: 2px solid {C_ORANGE}; border-radius: 8px; }}"
         )
         nivel_frame.setFixedWidth(220)
         nivel_layout = QVBoxLayout(nivel_frame)

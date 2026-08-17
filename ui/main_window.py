@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QStatusBar, QSizePolicy
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
-from PyQt6.QtGui import QPixmap, QIcon, QFont, QImage
+from PyQt6.QtGui import QPixmap, QIcon, QFont
 
 from ui.clientes_widget import ClientesWidget
 from ui.laudos_widget import LaudosWidget
@@ -17,19 +17,6 @@ from ui.pdf_widget import PDFWidget
 from ui.configuracoes_widget import ConfiguracoesWidget
 from ui.devtools_widget import DevToolsWidget
 from styles import COLORS
-
-
-def _make_white_bg_transparent(pix: QPixmap, threshold: int = 245) -> QPixmap:
-    """Retorna uma copia do pixmap com pixels quase-brancos tornados transparentes,
-    sem alterar o arquivo de imagem original."""
-    img = pix.toImage().convertToFormat(QImage.Format.Format_ARGB32)
-    for y in range(img.height()):
-        for x in range(img.width()):
-            color = img.pixelColor(x, y)
-            if color.red() >= threshold and color.green() >= threshold and color.blue() >= threshold:
-                color.setAlpha(0)
-                img.setPixelColor(x, y, color)
-    return QPixmap.fromImage(img)
 
 
 # ---------------------------------------------------------------------------
@@ -98,9 +85,19 @@ class MainWindow(QMainWindow):
         lbl_img.setStyleSheet("background: transparent; border: none;")
         lbl_img.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         if os.path.exists(logo_path):
+            # Sem tratamento de transparencia: o fundo branco do PNG casa com o
+            # fundo branco de #sidebar_logo, entao nao ha borda nem halo.
             pix = QPixmap(logo_path)
-            pix = _make_white_bg_transparent(pix)
-            pix = pix.scaled(180, 52, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            # Reduz na resolucao fisica da tela: com escalonamento de 125% ou
+            # 150% (o padrao no Windows) um pixmap de 180x52 e esticado depois
+            # pelo Qt e perde definicao.
+            dpr = self.devicePixelRatioF()
+            pix = pix.scaled(
+                int(180 * dpr), int(52 * dpr),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            pix.setDevicePixelRatio(dpr)
             lbl_img.setPixmap(pix)
         else:
             lbl_img.setText("ENGELOGIC")
@@ -169,6 +166,8 @@ class MainWindow(QMainWindow):
         self.w_laudos.open_painel.connect(self._on_open_painel)
         self.w_laudos.open_pdf.connect(self._on_open_pdf)
         self.w_laudos.go_clientes.connect(lambda: self._navigate(0))
+        # Uma importacao pode criar clientes e laudos: a lista precisa recarregar.
+        self.w_config.w_backup.dados_alterados.connect(self._on_dados_importados)
 
     def _navigate(self, index: int):
         self._current_index = index
@@ -179,6 +178,12 @@ class MainWindow(QMainWindow):
             # Recarrega os paineis do laudo atual, pois o nivel de aderencia
             # pode ter mudado ao preencher uma avaliacao em outra tela.
             self.w_laudos._load_paineis()
+
+    def _on_dados_importados(self):
+        self.w_clientes.refresh()
+        if self.w_laudos._cliente_id:
+            self.w_laudos._load_laudos()
+        self.status_bar.showMessage("Dados importados. Listas atualizadas.")
 
     def _on_open_laudos(self, cliente_id: int, cliente_nome: str):
         self.w_laudos.set_cliente(cliente_id, cliente_nome)

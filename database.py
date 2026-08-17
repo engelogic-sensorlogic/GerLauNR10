@@ -24,17 +24,26 @@ DB_PATH = _DATA_ROOT / "data" / "gerlaunr10.db"
 # ---------------------------------------------------------------------------
 # Dados padrão do checklist (10 itens NR-10)
 # ---------------------------------------------------------------------------
+_OBS_OK = "Nenhuma ação necessária, painel atende ao requisito da norma."
+_OBS_NA = "Elemento não presente ou não necessário neste tipo de painel."
+
 CHECKLIST_DEFAULT = [
     {
         "numero": 1,
         "questao": "O painel possui chave seccionadora ou dispositivo de desligamento geral com recurso para bloqueio com cadeado?",
         "justificativa": "10.3.1 - É obrigatório que os projetos de instalações elétricas especifiquem dispositivos de desligamento de circuitos que possuam recursos para impedimento de reenergização, para sinalização de advertência com indicação da condição operativa.",
         "opcoes": [
-            ("Sim", 1.0),
-            ("Não", 0.0),
-            ("Atende Parcial - Bloqueio", 0.5),
-            ("Atende Parcial - Indicador", 0.5),
-            ("Não avaliado", None),
+            ("Sim", 1.0, _OBS_OK, ""),
+            ("Não", 0.0,
+             "O painel deve ter a possibilidade de desligamento emergencial externo de forma rápida e eficaz, para ser utilizado em caso de emergência ou em procedimentos de operação e manutenção.",
+             "Providenciar a instalação de dispositivo de seccionamento com opção de bloqueio externo por cadeado. Exemplo: chave seccionadora, chave LOTO, disjuntor geral com manopla de acionamento externa, chave seccionadora do tipo Pacco ou semelhantes."),
+            ("Atende Parcial - Bloqueio", 0.5,
+             "O painel deve ter a possibilidade de desligamento emergencial externo de forma rápida e eficaz, para ser utilizado em caso de emergência ou em procedimentos de operação e manutenção.",
+             "Implementar recurso para bloqueio da operação do mecanismo, como instalação de porta-cadeado ou recurso semelhante, que impeça o usuário não autorizado de proceder com a manobra do dispositivo."),
+            ("Atende Parcial - Indicador", 0.5,
+             "O usuário deverá identificar de forma clara e objetiva a condição de energização do painel.",
+             "Implementar sistema de indicação de estado de operação, por luz sinalizadora ou indicação visual gráfica (adesivos), para a correta identificação do estado atual do dispositivo: Ligado/Desligado, Aberto/Fechado, ou semelhantes."),
+            ("Não avaliado", None, _OBS_NA, ""),
         ]
     },
     {
@@ -42,12 +51,20 @@ CHECKLIST_DEFAULT = [
         "questao": "Os disjuntores internos ao painel possuem alavanca com opção de bloqueio com cadeado e indicação de seu estado operacional?",
         "justificativa": "10.3.1 - É obrigatório que os projetos de instalações elétricas especifiquem dispositivos de desligamento de circuitos que possuam recursos para impedimento de reenergização.\n10.3.2 - O projeto elétrico deve prever a instalação de dispositivo de seccionamento de ação simultânea, que permita a aplicação de impedimento de reenergização do circuito.",
         "opcoes": [
-            ("Sim", 1.0),
-            ("Não", 0.0),
-            ("Atende Parcial - Bloqueio", 0.5),
-            ("Atende Parcial - Indicador", 0.5),
-            ("Atende Parcial - Dispositivos", 0.5),
-            ("Não avaliado", None),
+            ("Sim", 1.0, _OBS_OK, ""),
+            ("Não", 0.0,
+             "Para operações de manutenção, o responsável deverá ter opções de seccionamento dos circuitos internos de forma individual, bem como realizar os bloqueios necessários para a execução de suas atividades de forma segura.",
+             "Providenciar a instalação de dispositivo de bloqueio por cadeado nos disjuntores internos. Exemplo: acessórios mecânicos de bloqueio da haste ou alavanca de acionamento, ou a substituição do dispositivo por outro que possua tal recurso de bloqueio nativo."),
+            ("Atende Parcial - Bloqueio", 0.5,
+             "Para operações de manutenção, o responsável deverá ter opções de seccionamento dos circuitos internos de forma individual, bem como realizar os bloqueios necessários para a execução de suas atividades de forma segura.",
+             "Implementar recurso para bloqueio da operação do mecanismo, como instalação de porta-cadeado ou recurso semelhante, que impeça o usuário não autorizado de proceder com a manobra do dispositivo."),
+            ("Atende Parcial - Indicador", 0.5,
+             "O usuário deverá identificar de forma clara e objetiva a condição de energização dos circuitos individuais internos do painel.",
+             "Implementar sistema de indicação de estado de operação, com indicação visual gráfica (adesivos ou marcações), para a correta verificação do estado atual do dispositivo: Ligado/Desligado, Aberto/Fechado, ou semelhantes."),
+            ("Atende Parcial - Dispositivos", 0.5,
+             "Os disjuntores internos possuem parcialmente os recursos de bloqueio e indicação de estado exigidos, porém não de forma completa.",
+             "Complementar os disjuntores com os dispositivos de bloqueio e indicação de estado faltantes, ou substituí-los por modelos que já possuam esses recursos nativamente."),
+            ("Não avaliado", None, _OBS_NA, ""),
         ]
     },
     {
@@ -55,11 +72,17 @@ CHECKLIST_DEFAULT = [
         "questao": "O painel possui espaço suficiente no interior do cubículo para acomodar todos os componentes necessários à operação?",
         "justificativa": "10.3.3 - O projeto de instalações elétricas deve considerar o espaço seguro, quanto ao dimensionamento e a localização de seus componentes e as influências externas, quando da operação e da realização de serviços de construção e manutenção.",
         "opcoes": [
-            ("Sim", 1.0),
-            ("Não", 0.0),
-            ("Atende Parcial – Cabos desorganizados", 0.5),
-            ("Atende Parcial – Componentes Soltos", 0.5),
-            ("Não avaliado", None),
+            ("Sim", 1.0, _OBS_OK, ""),
+            ("Não", 0.0,
+             "Devido ao alto risco de choque elétrico, os painéis devem ser mantidos organizados, limpos e sem improvisações de instalação.",
+             "Providenciar a organização interna do painel para acomodação de todos os componentes de forma segura, fixados corretamente na placa de montagem ou nos trilhos, garantindo assim a segurança operacional do dispositivo. Se necessário, avaliar o retrofit do painel em questão."),
+            ("Atende Parcial – Cabos desorganizados", 0.5,
+             "Devido ao alto risco de choque elétrico, os painéis devem ser mantidos organizados, limpos e sem improvisações de instalação.",
+             "Executar procedimento de manutenção corretiva para organização dos cabos no interior das canaletas ou baias de montagem, ajustando as tampas das canaletas ou adotando solução adequada para a correta fixação e proteção dos cabos."),
+            ("Atende Parcial – Componentes Soltos", 0.5,
+             "Devido ao alto risco de choque elétrico, os painéis devem ser mantidos organizados, limpos e sem improvisações de instalação.",
+             "Executar procedimento de manutenção corretiva para fixação dos componentes nos trilhos ou na placa de montagem. O dispositivo deve estar fixado firmemente à infraestrutura, para garantia da segurança operacional e do correto aterramento funcional (se aplicável)."),
+            ("Não avaliado", None, _OBS_NA, ""),
         ]
     },
     {
@@ -67,10 +90,14 @@ CHECKLIST_DEFAULT = [
         "questao": "As fiações internas ao painel possuem identificação na fiação por anilhas alfanuméricas ou por cor?",
         "justificativa": "10.3.3.1 - Os circuitos elétricos com finalidades diferentes, tais como: comunicação, sinalização, controle e tensão elétrica devem ser identificados e instalados separadamente.",
         "opcoes": [
-            ("Sim", 1.0),
-            ("Não", 0.0),
-            ("Atende Parcial", 0.5),
-            ("Não avaliado", None),
+            ("Sim", 1.0, _OBS_OK, ""),
+            ("Não", 0.0,
+             "Para evitar falhas de interpretação dos circuitos elétricos e mitigar possíveis falhas humanas que possam ocasionar acidentes nos processos de operação e manutenção, os circuitos devem estar identificados e documentados.",
+             "Providenciar a identificação das fiações elétricas dos circuitos internos do painel, utilizando anilhas fixas com gravação legível do circuito específico, de acordo com o diagrama elétrico do painel. Sempre que possível, utilizar anilhas com proteção extra para a gravação (luvas ou recurso compatível). Caso seja adotada identificação dos circuitos por cores, essa codificação deve estar demonstrada no painel (etiqueta com a codificação ou documento visível), fixada em local de fácil visualização e compreensão."),
+            ("Atende Parcial", 0.5,
+             "Para evitar falhas de interpretação dos circuitos elétricos e mitigar possíveis falhas humanas que possam ocasionar acidentes nos processos de operação e manutenção, os circuitos devem estar identificados e documentados.",
+             "Executar procedimento de manutenção corretiva para codificação dos condutores sem marcação, utilizando anilhas impressas do tipo luva ou anilhas do tipo inserção. Caso a identificação existente adote esquema de cores para os circuitos, a codificação deve seguir o padrão já existente, de acordo com o diagrama elétrico específico."),
+            ("Não avaliado", None, _OBS_NA, ""),
         ]
     },
     {
@@ -78,12 +105,20 @@ CHECKLIST_DEFAULT = [
         "questao": "O painel elétrico, portas frontais, laterais, traseiras e placas de montagem estão interligadas ao sistema de aterramento?",
         "justificativa": "10.3.4 - O projeto deve definir a configuração do esquema de aterramento, a obrigatoriedade ou não da interligação entre o condutor neutro e o de proteção e a conexão à terra das partes condutoras não destinadas à condução da eletricidade.",
         "opcoes": [
-            ("Sim", 1.0),
-            ("Não", 0.0),
-            ("Porta não aterrada", 0.5),
-            ("Placa não aterrada", 0.5),
-            ("Porta e placa não aterradas", 0.5),
-            ("Não avaliado", None),
+            ("Sim", 1.0, _OBS_OK, ""),
+            ("Não", 0.0,
+             "Para evitar ou minimizar os riscos de choques elétricos aos usuários, todas as instalações elétricas energizadas devem possuir circuito de aterramento específico, equipotencializado com as demais infraestruturas eletromecânicas do local de instalação.",
+             "Providenciar condutor de aterramento e a equipotencialização dos componentes internos ao ponto de aterramento: placa de montagem, porta frontal, portas laterais e porta traseira. O ponto de aterramento principal deve estar acessível para a condução de aterramentos temporários em caso de manutenção, e deve estar identificado pela cor verde ou verde-amarelo."),
+            ("Porta não aterrada", 0.5,
+             "Para evitar ou minimizar os riscos de choques elétricos aos usuários, todas as instalações elétricas energizadas devem possuir circuito de aterramento específico, equipotencializado com as demais infraestruturas eletromecânicas do local de instalação.",
+             "Providenciar a equipotencialização da porta do painel ao ponto de aterramento, com condutor específico de diâmetro compatível ao nível de curto-circuito, identificado pela cor verde ou verde-amarelo."),
+            ("Placa não aterrada", 0.5,
+             "Para evitar ou minimizar os riscos de choques elétricos aos usuários, todas as instalações elétricas energizadas devem possuir circuito de aterramento específico, equipotencializado com as demais infraestruturas eletromecânicas do local de instalação.",
+             "Providenciar a equipotencialização da placa de montagem ao ponto de aterramento, com condutor específico de diâmetro compatível ao nível de curto-circuito, identificado pela cor verde ou verde-amarelo."),
+            ("Porta e placa não aterradas", 0.5,
+             "Para evitar ou minimizar os riscos de choques elétricos aos usuários, todas as instalações elétricas energizadas devem possuir circuito de aterramento específico, equipotencializado com as demais infraestruturas eletromecânicas do local de instalação.",
+             "Providenciar a equipotencialização das portas de acesso e da placa de montagem ao ponto de aterramento, com condutor específico de diâmetro compatível ao nível de curto-circuito, identificado pela cor verde ou verde-amarelo."),
+            ("Não avaliado", None, _OBS_NA, ""),
         ]
     },
     {
@@ -91,13 +126,23 @@ CHECKLIST_DEFAULT = [
         "questao": "O painel elétrico possui diagrama elétrico atualizado em local de fácil acesso e consulta?",
         "justificativa": "10.3.7 - O projeto das instalações elétricas deve ficar à disposição dos trabalhadores autorizados, das autoridades competentes e de outras pessoas autorizadas pela empresa e deve ser mantido atualizado.",
         "opcoes": [
-            ("Sim", 1.0),
-            ("Não", 0.0),
-            ("Restrição no acesso", 0.5),
-            ("Má conservação", 0.5),
-            ("Diagrama desatualizado", 0.5),
-            ("Diagrama incompleto", 0.5),
-            ("Não avaliado", None),
+            ("Sim", 1.0, _OBS_OK, ""),
+            ("Não", 0.0,
+             "Todas as instalações elétricas devem possuir a documentação técnica necessária para os procedimentos de operação e manutenção.",
+             "Providenciar a elaboração de documentação técnica que identifique de forma clara e legível os circuitos internos do painel. Esse diagrama deverá contemplar todos os circuitos internos ao painel, além de identificar os componentes de forma clara, com suas especificações técnicas."),
+            ("Restrição no acesso", 0.5,
+             "Diagrama elétrico existente, contudo não está disponível para a equipe de manutenção elétrica. O diagrama deve estar acessível a todos os responsáveis com permissão de acesso ao interior do painel.",
+             "Providenciar cópia legível e atualizada do diagrama, em local de fácil acesso para a equipe de manutenção."),
+            ("Má conservação", 0.5,
+             "Diagrama elétrico existente, contudo mantido em más condições de conservação.",
+             "Providenciar cópia legível e atualizada do diagrama."),
+            ("Diagrama desatualizado", 0.5,
+             "Diagrama elétrico existente, contudo a cópia disponível está desatualizada: o painel passou por melhorias ou aumento de circuitos e a documentação técnica não foi atualizada.",
+             "Providenciar a atualização do diagrama elétrico do painel em questão."),
+            ("Diagrama incompleto", 0.5,
+             "Diagrama elétrico existente, contudo a cópia disponível está incompleta ou com páginas faltantes.",
+             "Providenciar cópia legível e completa do diagrama."),
+            ("Não avaliado", None, _OBS_NA, ""),
         ]
     },
     {
@@ -105,12 +150,20 @@ CHECKLIST_DEFAULT = [
         "questao": "O painel elétrico possui iluminação adequada e está localizado em local de fácil acesso com posição de trabalho segura?",
         "justificativa": "10.3.10 - Os projetos devem assegurar que as instalações proporcionem aos trabalhadores iluminação adequada e uma posição de trabalho segura, de acordo com a NR 17 - Ergonomia.",
         "opcoes": [
-            ("Sim", 1.0),
-            ("Não", 0.0),
-            ("Atende parcial", 0.5),
-            ("Atende parcial - Iluminação", 0.5),
-            ("Atende parcial - Acesso", 0.5),
-            ("Não avaliado", None),
+            ("Sim", 1.0, _OBS_OK, ""),
+            ("Não", 0.0,
+             "Os locais de trabalho e de acesso aos painéis elétricos deverão possuir livre acesso e iluminação adequada ao seu uso.",
+             "O interior do painel e seus componentes devem estar visíveis mesmo em período noturno. O acesso ao painel deve estar livre e desobstruído, mantendo uma área de segurança de no mínimo 1,2 metros ao seu redor."),
+            ("Atende parcial", 0.5,
+             "Os locais de trabalho e de acesso aos painéis elétricos deverão possuir livre acesso e iluminação adequada ao seu uso.",
+             "Providenciar iluminação adequada no interior do painel ou em seu entorno, e providenciar a liberação dos espaços de acesso ao painel e ao seu redor."),
+            ("Atende parcial - Iluminação", 0.5,
+             "Os locais de trabalho e de acesso aos painéis elétricos deverão possuir livre acesso e iluminação adequada ao seu uso.",
+             "Providenciar iluminação adequada no interior do painel ou em seu entorno."),
+            ("Atende parcial - Acesso", 0.5,
+             "Os locais de trabalho e de acesso aos painéis elétricos deverão possuir livre acesso e iluminação adequada ao seu uso.",
+             "Providenciar a liberação dos espaços de acesso ao painel e ao seu redor."),
+            ("Não avaliado", None, _OBS_NA, ""),
         ]
     },
     {
@@ -118,10 +171,14 @@ CHECKLIST_DEFAULT = [
         "questao": "\"Partes vivas\" no interior do painel elétrico possuem barreiras que impeçam o contato acidental?",
         "justificativa": "10.2.8.2.1 - Na impossibilidade de implementação das medidas coletivas primárias, devem ser utilizadas outras medidas de proteção coletiva, tais como: isolação das partes vivas, obstáculos, barreiras, sinalização, sistema de seccionamento automático de alimentação.",
         "opcoes": [
-            ("Sim", 1.0),
-            ("Não", 0.0),
-            ("Atende parcial", 0.5),
-            ("Não avaliado", None),
+            ("Sim", 1.0, _OBS_OK, ""),
+            ("Não", 0.0,
+             "Os painéis elétricos devem ser projetados e construídos de forma a não proporcionar riscos adicionais aos usuários e às equipes de manutenção.",
+             "Providenciar o isolamento das partes energizadas expostas no interior do painel."),
+            ("Atende parcial", 0.5,
+             "Alguns pontos energizados não possuem bloqueios contra o contato acidental.",
+             "Providenciar o isolamento das partes energizadas expostas no interior do painel."),
+            ("Não avaliado", None, _OBS_NA, ""),
         ]
     },
     {
@@ -129,11 +186,17 @@ CHECKLIST_DEFAULT = [
         "questao": "O painel possui etiquetas de identificação das tensões de força/comando e TAG do painel?",
         "justificativa": "10.3.9 - O memorial descritivo do projeto deve conter, no mínimo, os seguintes itens de segurança: especificação das características relativas à proteção contra choques elétricos; descrição do sistema de identificação de circuitos elétricos e equipamentos.",
         "opcoes": [
-            ("Sim", 1.0),
-            ("Não", 0.0),
-            ("Atende Parcial – TAG", 0.5),
-            ("Atende Parcial – Força / Comando", 0.5),
-            ("Não avaliado", None),
+            ("Sim", 1.0, _OBS_OK, ""),
+            ("Não", 0.0,
+             "O painel deve possuir indicações legíveis dos riscos pertinentes ao equipamento e informações técnicas aos usuários, visíveis a todos que estiverem próximos às áreas de instalação.",
+             "Providenciar etiquetas de sinalização e identificação do painel: etiqueta com a inscrição da tensão máxima de operação, etiqueta de TAG de identificação do painel (número ou identificação no inventário de equipamentos do prontuário da NR-10) e etiqueta de advertência sobre os riscos de choque elétrico."),
+            ("Atende Parcial – TAG", 0.5,
+             "O painel deve possuir formas de identificação para controle e registro de manutenções, alterações e melhorias.",
+             "Providenciar etiqueta de TAG de identificação do painel, com número ou identificação no inventário de equipamentos do prontuário da NR-10."),
+            ("Atende Parcial – Força / Comando", 0.5,
+             "O painel deve possuir indicações legíveis dos riscos pertinentes ao equipamento e informações técnicas aos usuários, visíveis a todos que estiverem próximos às áreas de instalação.",
+             "Providenciar etiqueta da tensão máxima de operação e etiqueta de advertência sobre os riscos de choque elétrico."),
+            ("Não avaliado", None, _OBS_NA, ""),
         ]
     },
     {
@@ -141,10 +204,14 @@ CHECKLIST_DEFAULT = [
         "questao": "O painel possui portas de acesso com dispositivo de bloqueio por cadeado que impeça a abertura por pessoal não qualificado?",
         "justificativa": "10.4.1 - As instalações elétricas devem ser construídas, montadas, operadas, reformadas, ampliadas, reparadas e inspecionadas de forma a garantir a segurança e a saúde dos trabalhadores.\n10.4.4.1 - Os locais de serviços elétricos, compartimentos e invólucros de equipamentos e instalações elétricas são exclusivos para essa finalidade.",
         "opcoes": [
-            ("Sim", 1.0),
-            ("Não", 0.0),
-            ("Atende parcial", 0.5),
-            ("Não avaliado", None),
+            ("Sim", 1.0, _OBS_OK, ""),
+            ("Não", 0.0,
+             "O painel deve possuir recursos que impeçam sua abertura e acesso por pessoal não habilitado.",
+             "Providenciar mecanismo que impeça a abertura e o acesso por pessoal não habilitado e/ou não autorizado: fecho ou tranca com bloqueio por cadeado, ou fechadura com abertura por chave específica, de posse dos responsáveis pelas ações de manutenção."),
+            ("Atende parcial", 0.5,
+             "O painel deve possuir recursos que impeçam sua abertura e acesso por pessoal não habilitado.",
+             "Providenciar mecanismo que impeça a abertura e o acesso por pessoal não habilitado e/ou não autorizado: fecho ou tranca com bloqueio por cadeado, ou fechadura com abertura por chave específica, de posse dos responsáveis pelas ações de manutenção."),
+            ("Não avaliado", None, _OBS_NA, ""),
         ]
     },
 ]
@@ -283,7 +350,9 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             item_id INTEGER NOT NULL REFERENCES checklist_items(id) ON DELETE CASCADE,
             descricao TEXT NOT NULL,
-            peso REAL
+            peso REAL,
+            observacao_padrao TEXT,
+            acao_corretiva_padrao TEXT
         );
     """)
     conn.commit()
@@ -301,6 +370,15 @@ def init_db():
         except Exception:
             pass  # coluna ja existe
 
+    # Migration: adiciona colunas de textos padrao de observacao/acao corretiva
+    # nas opcoes do checklist, se nao existirem
+    for col in ("observacao_padrao", "acao_corretiva_padrao"):
+        try:
+            conn.execute("ALTER TABLE checklist_opcoes ADD COLUMN %s TEXT" % col)
+            conn.commit()
+        except Exception:
+            pass  # coluna ja existe
+
     # Popula checklist padrão se vazio
     count = c.execute("SELECT COUNT(*) FROM checklist_items").fetchone()[0]
     if count == 0:
@@ -310,10 +388,35 @@ def init_db():
                 (item["numero"], item["questao"], item["justificativa"])
             )
             item_id = c.lastrowid
-            for desc, peso in item["opcoes"]:
+            for desc, peso, obs_pad, ac_pad in item["opcoes"]:
                 c.execute(
-                    "INSERT INTO checklist_opcoes (item_id, descricao, peso) VALUES (?,?,?)",
-                    (item_id, desc, peso)
+                    """INSERT INTO checklist_opcoes
+                       (item_id, descricao, peso, observacao_padrao, acao_corretiva_padrao)
+                       VALUES (?,?,?,?,?)""",
+                    (item_id, desc, peso, obs_pad, ac_pad)
+                )
+        conn.commit()
+    else:
+        # Backfill: bancos criados antes da existencia dos textos padrao tem
+        # as opcoes do checklist ja populadas, mas sem observacao_padrao/
+        # acao_corretiva_padrao. Preenche apenas onde ainda estiver vazio,
+        # sem sobrescrever eventual customizacao feita pelo usuario.
+        for item in CHECKLIST_DEFAULT:
+            row = c.execute(
+                "SELECT id FROM checklist_items WHERE numero=?", (item["numero"],)
+            ).fetchone()
+            if not row:
+                continue
+            item_id = row["id"]
+            for desc, peso, obs_pad, ac_pad in item["opcoes"]:
+                c.execute(
+                    """UPDATE checklist_opcoes
+                       SET observacao_padrao=COALESCE(NULLIF(observacao_padrao, ''), ?),
+                           acao_corretiva_padrao=COALESCE(NULLIF(acao_corretiva_padrao, ''), ?)
+                       WHERE item_id=? AND descricao=?
+                         AND (observacao_padrao IS NULL OR observacao_padrao=''
+                              OR acao_corretiva_padrao IS NULL OR acao_corretiva_padrao='')""",
+                    (obs_pad, ac_pad, item_id, desc)
                 )
         conn.commit()
 
@@ -539,11 +642,31 @@ def desvincular_participante_laudo(laudo_id: int, participante_id: int):
     conn.close()
 
 
+def sincronizar_participantes_laudo(laudo_id: int) -> int:
+    """Garante que todos os participantes do cliente estejam vinculados ao laudo.
+
+    O vinculo era feito uma unica vez, na criacao do laudo, com os participantes
+    que existiam naquele instante -- quem fosse cadastrado depois nunca aparecia
+    no item 1.3 nem na folha de assinaturas do PDF. Retorna quantos vinculos
+    novos foram criados.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""INSERT OR IGNORE INTO laudo_participantes (laudo_id, participante_id)
+                 SELECT ?, p.id FROM participantes p
+                 JOIN laudos l ON l.cliente_id = p.cliente_id
+                 WHERE l.id = ?""", (laudo_id, laudo_id))
+    novos = c.rowcount
+    conn.commit()
+    conn.close()
+    return novos
+
+
 def participantes_do_laudo(laudo_id: int):
     conn = get_connection()
     rows = conn.execute("""SELECT p.* FROM participantes p
                            JOIN laudo_participantes lp ON lp.participante_id=p.id
-                           WHERE lp.laudo_id=?""", (laudo_id,)).fetchall()
+                           WHERE lp.laudo_id=? ORDER BY p.id""", (laudo_id,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -740,6 +863,14 @@ def listar_checklist_items():
 
 
 def salvar_checklist_item(dados: dict) -> int:
+    """Salva um item do checklist e suas opcoes.
+
+    As opcoes sao atualizadas "no lugar" (casando pela descricao) em vez de
+    apagar e recriar tudo -- avaliacoes ja registradas referenciam
+    checklist_opcoes.id via FOREIGN KEY, entao recriar as opcoes quebraria
+    essas avaliacoes (ou falharia com IntegrityError, ja que a FK impede
+    apagar uma opcao ainda referenciada).
+    """
     conn = get_connection()
     c = conn.cursor()
     if dados.get("id"):
@@ -747,15 +878,46 @@ def salvar_checklist_item(dados: dict) -> int:
                      WHERE id=?""",
                   (dados["numero"], dados["questao"], dados.get("justificativa"), dados.get("ativo", 1), dados["id"]))
         iid = dados["id"]
-        # Recria opções
-        c.execute("DELETE FROM checklist_opcoes WHERE item_id=?", (iid,))
+        existentes = c.execute(
+            "SELECT id, descricao FROM checklist_opcoes WHERE item_id=?", (iid,)
+        ).fetchall()
+        existentes_por_desc = {row["descricao"]: row["id"] for row in existentes}
     else:
         c.execute("INSERT INTO checklist_items (numero, questao, justificativa) VALUES (?,?,?)",
                   (dados["numero"], dados["questao"], dados.get("justificativa")))
         iid = c.lastrowid
+        existentes_por_desc = {}
+
+    descricoes_novas = set()
     for opc in dados.get("opcoes", []):
-        c.execute("INSERT INTO checklist_opcoes (item_id, descricao, peso) VALUES (?,?,?)",
-                  (iid, opc["descricao"], opc.get("peso")))
+        desc = opc["descricao"]
+        descricoes_novas.add(desc)
+        if desc in existentes_por_desc:
+            c.execute(
+                """UPDATE checklist_opcoes
+                   SET peso=?, observacao_padrao=?, acao_corretiva_padrao=?
+                   WHERE id=?""",
+                (opc.get("peso"), opc.get("observacao_padrao"), opc.get("acao_corretiva_padrao"),
+                 existentes_por_desc[desc]))
+        else:
+            c.execute(
+                """INSERT INTO checklist_opcoes
+                   (item_id, descricao, peso, observacao_padrao, acao_corretiva_padrao)
+                   VALUES (?,?,?,?,?)""",
+                (iid, desc, opc.get("peso"),
+                 opc.get("observacao_padrao"), opc.get("acao_corretiva_padrao")))
+
+    # Remove opcoes que nao estao mais na lista -- se alguma ja tiver
+    # avaliacoes vinculadas, a FK impede a exclusao; nesse caso a opcao
+    # antiga fica orfa (nao aparece mais no formulario, mas preserva o
+    # historico de avaliacoes ja registradas).
+    for desc, opc_id in existentes_por_desc.items():
+        if desc not in descricoes_novas:
+            try:
+                c.execute("DELETE FROM checklist_opcoes WHERE id=?", (opc_id,))
+            except sqlite3.IntegrityError:
+                pass
+
     conn.commit()
     conn.close()
     return iid

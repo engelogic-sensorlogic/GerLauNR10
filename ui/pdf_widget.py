@@ -382,6 +382,12 @@ class PDFWidget(QWidget):
             laudo["conclusoes"] = self.conclusoes_edit.toPlainText()
             db.salvar_laudo(laudo)
 
+        # Participantes cadastrados depois da criação do laudo ainda não estão
+        # vinculados; sem isto ficariam de fora do item 1.3 e das assinaturas.
+        novos = db.sincronizar_participantes_laudo(self._laudo_id)
+        if novos:
+            self._log(f"{novos} participante(s) novo(s) vinculado(s) a este laudo.")
+
         opcoes = {
             "capa":          self.chk_capa.isChecked(),
             "identificacao": self.chk_identificacao.isChecked(),
