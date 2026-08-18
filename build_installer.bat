@@ -100,18 +100,27 @@ echo [OK] Script gerado: GerLauNR10_installer.iss
 
 :: ---------------------------------------------------------------
 :: 6) Compilacao do instalador
-::    O caminho padrao do Inno Setup tem parenteses ("Program Files
-::    (x86)"), que quebram o parser do cmd dentro de blocos IF( ) --
-::    por isso o fluxo usa GOTO.
+::    O ISCC.exe muda de pasta conforme a versao e conforme a
+::    instalacao ser de 64 ou 32 bits, entao procuramos nos caminhos
+::    conhecidos, da versao mais nova para a mais antiga.
+::    O caminho contem parenteses em "Program Files (x86)", que quebram
+::    o parser do cmd dentro de blocos IF( ) -- por isso o fluxo usa GOTO.
 :: ---------------------------------------------------------------
-SET "INNO_PATH=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-IF NOT EXIST "%INNO_PATH%" SET "INNO_PATH=C:\Program Files\Inno Setup 6\ISCC.exe"
-IF NOT EXIST "%INNO_PATH%" GOTO INNO_NAO_ENCONTRADO
+SET "INNO_PATH="
+FOR %%P IN (
+    "C:\Program Files\Inno Setup 7\ISCC.exe"
+    "C:\Program Files (x86)\Inno Setup 7\ISCC.exe"
+    "C:\Program Files\Inno Setup 6\ISCC.exe"
+    "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+) DO IF NOT DEFINED INNO_PATH IF EXIST %%P SET "INNO_PATH=%%~P"
 
-echo [INFO] Compilando instalador com Inno Setup...
+IF NOT DEFINED INNO_PATH GOTO INNO_NAO_ENCONTRADO
+
+echo [INFO] Inno Setup: %INNO_PATH%
+echo [INFO] Compilando instalador...
 "%INNO_PATH%" GerLauNR10_installer.iss
 IF %ERRORLEVEL% NEQ 0 GOTO INNO_FALHOU
-echo [OK] Instalador gerado na pasta Output\
+echo [OK] Instalador gerado na pasta Output
 GOTO FIM_ISS
 
 :INNO_FALHOU
