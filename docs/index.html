@@ -191,6 +191,14 @@
       Compartilhar não aparecer.
     </div>
     <button class="b-sec" style="width:100%" id="btn-diag">Executar diagnóstico</button>
+    <div class="p" style="margin-top:10px">
+      Testes reais — cada botão tenta abrir a folha de compartilhamento do
+      Android agora. Anote qual funciona.
+    </div>
+    <button class="b-sec" style="width:100%;margin-top:6px" id="btn-t-zip">Testar com arquivo .zip</button>
+    <button class="b-sec" style="width:100%;margin-top:6px" id="btn-t-txt">Testar com arquivo .txt</button>
+    <button class="b-sec" style="width:100%;margin-top:6px" id="btn-t-txto">Testar só texto (sem arquivo)</button>
+    <div id="t-res"></div>
     <pre id="diag" class="oculto" style="background:#1a2332;color:#d0d7de;padding:10px;
          border-radius:6px;font-size:11px;white-space:pre-wrap;word-break:break-all;
          margin-top:10px"></pre>
@@ -680,24 +688,35 @@ $("#btn-gerar").onclick = async () => {
                  + "<a href='" + url + "' download='" + nomeArq + "'>"
                  + "<button class='b-lar'>Salvar arquivo</button></a>" + extra;
     const bs = document.getElementById("btn-share");
-    if (bs) bs.onclick = async () => {
+    if (bs) bs.onclick = function (){
+      // Handler SINCRONO de proposito. navigator.share() exige "ativacao
+      // transitoria": tem de ser chamado no mesmo passo do toque. Com um
+      // handler async, qualquer await antes da chamada consome a ativacao e o
+      // Android responde NotAllowedError -- foi o que ocorreu no aparelho.
+      // Por isso nada de await aqui, e o File e criado na hora.
+      const f = new File([zip], nomeCompartilhar, {type:"application/zip"});
+      const aviso = (titulo, texto) => {
+        const av = document.createElement("div");
+        av.className = "aviso erro";
+        av.style.marginTop = "8px";
+        av.innerHTML = "<b>" + titulo + "</b><br>" + texto;
+        bs.insertAdjacentElement("afterend", av);
+      };
       try {
         // sem 'title'/'text': alguns aplicativos, ao receberem texto junto do
         // arquivo, tratam o envio como mensagem e descartam o anexo
-        await navigator.share({files:[arqCompartilhavel]});
-      } catch(e){
-        // AbortError = o usuario fechou a folha de compartilhamento; qualquer
-        // outro erro merece explicacao, senao o botao parece so nao funcionar.
-        if (e && e.name !== "AbortError"){
-          const av = document.createElement("div");
-          av.className = "aviso erro";
-          av.style.marginTop = "8px";
-          av.innerHTML = "<b>O aparelho recusou compartilhar este arquivo</b><br>"
-                       + "(" + (e.name || "erro") + "). Toque em <b>Salvar arquivo</b> e "
-                       + "envie a partir da pasta Downloads pelo gerenciador de arquivos.";
-          bs.insertAdjacentElement("afterend", av);
+        navigator.share({files:[f]}).catch(e => {
+          // AbortError = o usuario fechou a folha de compartilhamento
+          if (!e || e.name === "AbortError") return;
+          aviso("O aparelho recusou compartilhar (" + (e.name || "erro") + ")",
+                "Toque em <b>Salvar arquivo</b> e envie a partir da pasta "
+                + "<b>Downloads</b> pelo gerenciador de arquivos — o resultado é o mesmo.");
           bs.style.display = "none";
-        }
+        });
+      } catch(e){
+        aviso("Não foi possível abrir o compartilhamento (" + (e.name || "erro") + ")",
+              "Use <b>Salvar arquivo</b> e envie pela pasta <b>Downloads</b>.");
+        bs.style.display = "none";
       }
     };
   }catch(e){
@@ -754,6 +773,42 @@ $("#btn-diag").onclick = () => {
   el.classList.remove("oculto");
   $("#btn-diag-copiar").classList.remove("oculto");
 };
+/* Testes reais de compartilhamento. Sao handlers SINCRONOS: navigator.share()
+   e chamado no mesmo passo do toque, sem nenhum await antes, que e a condicao
+   para o Android aceitar a chamada. */
+function _resultadoTeste(rotulo, ok, detalhe){
+  const d = document.createElement("div");
+  d.className = "aviso " + (ok ? "ok" : "erro");
+  d.style.marginTop = "8px";
+  d.innerHTML = "<b>" + rotulo + ":</b> " + (ok ? "abriu" : "falhou") +
+                (detalhe ? " (" + detalhe + ")" : "");
+  $("#t-res").appendChild(d);
+}
+function _testarShare(rotulo, dados){
+  try{
+    const p = navigator.share(dados);
+    p.then(() => _resultadoTeste(rotulo, true, "enviado"))
+     .catch(e => _resultadoTeste(rotulo, e && e.name === "AbortError",
+                                 e && e.name === "AbortError"
+                                   ? "você fechou — mas ABRIU, então funciona"
+                                   : (e && e.name) || "erro"));
+  }catch(e){
+    _resultadoTeste(rotulo, false, "exceção " + ((e && e.name) || "erro"));
+  }
+}
+$("#btn-t-zip").onclick = function (){
+  const b = new Uint8Array([80,75,5,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]);
+  _testarShare("Arquivo .zip",
+    {files:[new File([b], "teste.zip", {type:"application/zip"})]});
+};
+$("#btn-t-txt").onclick = function (){
+  _testarShare("Arquivo .txt",
+    {files:[new File(["teste GerLauNR10"], "teste.txt", {type:"text/plain"})]});
+};
+$("#btn-t-txto").onclick = function (){
+  _testarShare("Só texto", {text:"Teste de compartilhamento do GerLauNR10"});
+};
+
 $("#btn-diag-copiar").onclick = async () => {
   try{
     await navigator.clipboard.writeText($("#diag").textContent);
