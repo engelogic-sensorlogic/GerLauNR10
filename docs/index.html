@@ -185,6 +185,21 @@
     <div id="res-gerar"></div>
   </div>
   <div class="card">
+    <h2>Diagnóstico do compartilhamento</h2>
+    <div class="p" style="margin-bottom:10px">
+      Mostra o que este aparelho aceita compartilhar. Use se o botão
+      Compartilhar não aparecer.
+    </div>
+    <button class="b-sec" style="width:100%" id="btn-diag">Executar diagnóstico</button>
+    <pre id="diag" class="oculto" style="background:#1a2332;color:#d0d7de;padding:10px;
+         border-radius:6px;font-size:11px;white-space:pre-wrap;word-break:break-all;
+         margin-top:10px"></pre>
+    <button class="b-sec oculto" style="width:100%;margin-top:8px" id="btn-diag-copiar">
+      Copiar resultado
+    </button>
+  </div>
+
+  <div class="card">
     <h2>Recomeçar</h2>
     <div class="p" style="margin-bottom:10px">
       Apaga o painel atual do aparelho para começar outro. Gere e salve o
@@ -622,10 +637,18 @@ $("#btn-gerar").onclick = async () => {
     // o mesmo ZIP nos dois casos, e o PC identifica o pacote pelo manifest
     // interno, nao pela extensao.
     const arqCompartilhavel = (() => {
-      for (const nome of [nomeArq, nomeArq.replace(/\.gnr10$/, ".zip")]) {
-        const f = new File([zip], nome, {type:"application/zip"});
-        try { if (navigator.canShare && navigator.canShare({files:[f]})) return f; }
-        catch(e){ /* navegador sem suporte a compartilhar arquivos */ }
+      if (!navigator.share) return null;
+      const base = nomeArq.replace(/\.gnr10$/, "");
+      const tentativas = [
+        [nomeArq,        "application/zip"],
+        [base + ".zip",  "application/zip"],
+        [base + ".zip",  "application/octet-stream"],
+        [base + ".zip",  ""],
+      ];
+      for (const [nome, tipo] of tentativas){
+        const f = new File([zip], nome, tipo ? {type:tipo} : undefined);
+        try { if (!navigator.canShare || navigator.canShare({files:[f]})) return f; }
+        catch(e){ /* tenta a proxima combinacao */ }
       }
       return null;
     })();
@@ -648,8 +671,22 @@ $("#btn-gerar").onclick = async () => {
                  + "<button class='b-lar'>Salvar arquivo</button></a>" + extra;
     const bs = document.getElementById("btn-share");
     if (bs) bs.onclick = async () => {
-      try { await navigator.share({files:[arqCompartilhavel], title:nomeArq}); }
-      catch(e){ /* usuario cancelou */ }
+      try {
+        await navigator.share({files:[arqCompartilhavel], title:nomeArq});
+      } catch(e){
+        // AbortError = o usuario fechou a folha de compartilhamento; qualquer
+        // outro erro merece explicacao, senao o botao parece so nao funcionar.
+        if (e && e.name !== "AbortError"){
+          const av = document.createElement("div");
+          av.className = "aviso erro";
+          av.style.marginTop = "8px";
+          av.innerHTML = "<b>O aparelho recusou compartilhar este arquivo</b><br>"
+                       + "(" + (e.name || "erro") + "). Toque em <b>Salvar arquivo</b> e "
+                       + "envie a partir da pasta Downloads pelo gerenciador de arquivos.";
+          bs.insertAdjacentElement("afterend", av);
+          bs.style.display = "none";
+        }
+      }
     };
   }catch(e){
     cx.innerHTML = "<div class='aviso erro'>Falha ao gerar: " + escapar(e.message) + "</div>";
@@ -662,6 +699,57 @@ $("#btn-instalar").onclick = async () => {
   await promptInstalar.userChoice;
   promptInstalar = null;
   $("#btn-instalar").style.display = "none";
+};
+
+/* ---- diagnostico do compartilhamento ----
+   O Chrome no Android mantem uma lista de extensoes/tipos que aceita
+   compartilhar como arquivo. Sem saber o que este aparelho aceita, so daria
+   para tentar as cegas -- aqui a resposta vem do proprio navegador. */
+$("#btn-diag").onclick = () => {
+  const zip = new Blob([new Uint8Array([80,75,3,4,0,0,0,0])], {type:"application/zip"});
+  const casos = [
+    ["arquivo.gnr10", "application/zip"],
+    ["arquivo.zip",   "application/zip"],
+    ["arquivo.zip",   "application/octet-stream"],
+    ["arquivo.txt",   "text/plain"],
+    ["arquivo.pdf",   "application/pdf"],
+    ["arquivo.jpg",   "image/jpeg"],
+  ];
+  const l = [];
+  l.push("navigator.share      : " + (typeof navigator.share));
+  l.push("navigator.canShare   : " + (typeof navigator.canShare));
+  l.push("contexto seguro      : " + window.isSecureContext);
+  l.push("modo instalado       : " +
+         (matchMedia("(display-mode: standalone)").matches ? "sim" : "não (aba do navegador)"));
+  l.push("");
+  l.push("canShare por tipo de arquivo:");
+  for (const [nome, tipo] of casos){
+    let r;
+    try{
+      r = navigator.canShare
+        ? String(navigator.canShare({files:[new File([zip], nome, {type:tipo})]}))
+        : "sem canShare";
+    }catch(e){ r = "erro: " + e.name; }
+    l.push("  " + (nome + " (" + tipo + ")").padEnd(42) + r);
+  }
+  l.push("");
+  l.push("canShare só texto    : " +
+         (navigator.canShare ? String(navigator.canShare({text:"teste"})) : "sem canShare"));
+  l.push("");
+  l.push(navigator.userAgent);
+  const el = $("#diag");
+  el.textContent = l.join("\n");
+  el.classList.remove("oculto");
+  $("#btn-diag-copiar").classList.remove("oculto");
+};
+$("#btn-diag-copiar").onclick = async () => {
+  try{
+    await navigator.clipboard.writeText($("#diag").textContent);
+    $("#btn-diag-copiar").textContent = "Copiado";
+    setTimeout(() => $("#btn-diag-copiar").textContent = "Copiar resultado", 1500);
+  }catch(e){
+    $("#btn-diag-copiar").textContent = "Selecione o texto acima e copie";
+  }
 };
 
 $("#btn-limpar").onclick = async () => {
