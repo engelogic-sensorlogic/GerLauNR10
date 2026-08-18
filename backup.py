@@ -35,6 +35,12 @@ FORMATO = "gerlaunr10-backup"
 VERSAO = 1
 EXTENSAO = ".gnr10"
 
+# O checklist vai para o aplicativo de campo (celular) como JSON puro, nao como
+# pacote ZIP: nao ha imagens envolvidas e assim o app o le direto, sem precisar
+# descompactar nada.
+FORMATO_CHECKLIST = "gerlaunr10-checklist"
+EXTENSAO_CHECKLIST = ".json"
+
 FOTOS_DIR = db.DB_PATH.parent / "fotos"
 
 # Colunas copiadas de cada tabela. Ids nunca sao exportados: o destino gera os
@@ -254,6 +260,47 @@ def exportar_painel(painel_id: int, destino: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Checklist (para o aplicativo de campo)
+# ---------------------------------------------------------------------------
+def exportar_checklist(destino: str) -> dict:
+    """Grava o checklist ativo em JSON, para carregar no aplicativo de campo.
+
+    Leva so o que o tecnico precisa ver na tela para responder: o numero do
+    item, a pergunta e as opcoes de resposta. Pesos, textos da norma e
+    recomendacoes ficam de fora de proposito -- o aplicativo de campo apenas
+    coleta, e todo o processamento acontece no PC, que resolve peso e textos
+    padrao na importacao a partir do proprio checklist.
+
+    Como as respostas trafegam pela descricao da opcao, o checklist do
+    aparelho precisa ser o mesmo do PC: exporte de novo sempre que edita-lo.
+    """
+    itens = []
+    for item in db.listar_checklist_items():
+        itens.append({
+            "numero": item["numero"],
+            "questao": item["questao"],
+            "opcoes": [o["descricao"] for o in item["opcoes"]],
+        })
+
+    dados = {
+        "formato": FORMATO_CHECKLIST,
+        "versao": VERSAO,
+        "gerado_em": datetime.now().isoformat(timespec="seconds"),
+        "itens": itens,
+    }
+    destino = str(destino)
+    os.makedirs(os.path.dirname(os.path.abspath(destino)) or ".", exist_ok=True)
+    with open(destino, "w", encoding="utf-8") as fh:
+        json.dump(dados, fh, ensure_ascii=False, indent=2)
+    return {
+        "arquivo": destino,
+        "itens": len(itens),
+        "opcoes": sum(len(i["opcoes"]) for i in itens),
+        "tamanho": os.path.getsize(destino),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Leitura
 # ---------------------------------------------------------------------------
 def ler_manifest(arquivo: str) -> dict:
@@ -292,11 +339,21 @@ def _extrair_foto(zf: zipfile.ZipFile, nome: str, pasta: Path) -> str:
 
 
 def _mapa_descricoes() -> dict:
-    """(item_numero, descricao) -> opcao_id no banco local."""
+    """(item_numero, descricao) -> dados da opcao no checklist local.
+
+    O checklist do PC e a autoridade sobre peso e textos padrao. Um pacote vindo
+    do aplicativo de campo traz apenas a opcao escolhida; o peso e as
+    recomendacoes sao resolvidos aqui, no momento da importacao.
+    """
     mapa = {}
     for item in db.listar_checklist_items():
         for opc in item["opcoes"]:
-            mapa[(item["numero"], opc["descricao"])] = opc["id"]
+            mapa[(item["numero"], opc["descricao"])] = {
+                "id": opc["id"],
+                "peso": opc["peso"],
+                "observacao_padrao": opc.get("observacao_padrao") or "",
+                "acao_corretiva_padrao": opc.get("acao_corretiva_padrao") or "",
+            }
     return mapa
 
 
@@ -369,15 +426,30 @@ def _importar_painel_dict(pdados: dict, laudo_id: int, zf: zipfile.ZipFile,
 
     for aval in pdados.get("avaliacoes", []):
         chave = (aval.get("item_numero"), aval.get("opcao_descricao") or "")
-        opcao_id = opcoes.get(chave)
-        if opcao_id is None and aval.get("opcao_descricao"):
-            # O checklist local nao tem essa opcao (foi editada ou removida). O
-            # peso e os textos sao preservados para nao perder a avaliacao.
-            relatorio["opcoes_nao_encontradas"].append(
-                "Item %s: %s" % (aval.get("item_numero"), aval.get("opcao_descricao")))
+        opc = opcoes.get(chave)
+        obs = (aval.get("observacoes") or "").strip()
+        acao = (aval.get("acao_corretiva") or "").strip()
+
+        if opc is None:
+            if aval.get("opcao_descricao"):
+                # O checklist local nao tem essa opcao (foi editada ou removida).
+                # O peso e os textos do pacote sao preservados para nao perder a
+                # avaliacao, mas a opcao fica sem vinculo.
+                relatorio["opcoes_nao_encontradas"].append(
+                    "Item %s: %s" % (aval.get("item_numero"), aval.get("opcao_descricao")))
+            opcao_id, peso = None, aval.get("peso")
+        else:
+            # O checklist do PC e a autoridade: peso e recomendacoes saem dele,
+            # nao do pacote. Assim o aplicativo de campo so precisa registrar a
+            # opcao escolhida -- nao carrega pesos nem textos da norma.
+            opcao_id, peso = opc["id"], opc["peso"]
+            if not obs:
+                obs = opc["observacao_padrao"]
+            if not acao:
+                acao = opc["acao_corretiva_padrao"]
+
         db.salvar_avaliacao(painel_id, aval.get("item_numero"), opcao_id,
-                            aval.get("peso"), aval.get("observacoes") or "",
-                            aval.get("acao_corretiva") or "")
+                            peso, obs, acao)
 
     for ev in pdados.get("evidencias", []):
         caminho = _extrair_foto(zf, ev.get("arquivo", ""), pasta)

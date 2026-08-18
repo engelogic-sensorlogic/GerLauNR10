@@ -137,6 +137,16 @@ class BackupWidget(QWidget):
         self.btn_exportar.setObjectName("btn_accent")
         self.btn_exportar.clicked.connect(self._exportar)
         v.addWidget(self.btn_exportar)
+
+        self.btn_checklist = QPushButton("Exportar checklist para o aplicativo de campo")
+        self.btn_checklist.setObjectName("btn_secondary")
+        self.btn_checklist.setToolTip(
+            "Gera um arquivo .json com as perguntas, opções e pesos do checklist, "
+            "para carregar no aplicativo do celular. Exporte novamente sempre que "
+            "editar o checklist na aba ao lado."
+        )
+        self.btn_checklist.clicked.connect(self._exportar_checklist)
+        v.addWidget(self.btn_checklist)
         return cx
 
     def _grupo_importar(self) -> QGroupBox:
@@ -265,6 +275,7 @@ class BackupWidget(QWidget):
     def _ocupado(self, ocupado: bool):
         self.progresso.setVisible(ocupado)
         self.btn_exportar.setEnabled(not ocupado)
+        self.btn_checklist.setEnabled(not ocupado)
         self.btn_escolher.setEnabled(not ocupado)
         self.btn_importar.setEnabled(not ocupado and self._arquivo_import is not None)
 
@@ -327,6 +338,31 @@ class BackupWidget(QWidget):
         QMessageBox.information(self, "Exportação concluída",
                                 "Pacote gravado em:\n%s\n\nTamanho: %s"
                                 % (r["arquivo"], _mb(r["tamanho"])))
+
+    def _exportar_checklist(self):
+        sugerido = "checklist_nr10_%s%s" % (datetime.now().strftime("%Y-%m-%d"),
+                                            backup.EXTENSAO_CHECKLIST)
+        caminho, _ = QFileDialog.getSaveFileName(
+            self, "Salvar checklist para o aplicativo de campo", sugerido,
+            "Checklist GerLauNR10 (*%s)" % backup.EXTENSAO_CHECKLIST)
+        if not caminho:
+            return
+        if not caminho.lower().endswith(backup.EXTENSAO_CHECKLIST):
+            caminho += backup.EXTENSAO_CHECKLIST
+        try:
+            r = backup.exportar_checklist(caminho)
+        except Exception as e:            # noqa: BLE001 - reportado na interface
+            self._log("ERRO ao exportar checklist: %s" % e)
+            QMessageBox.critical(self, "Falha na exportação", str(e))
+            return
+        self._log("Checklist exportado: %d itens, %d opções, %.1f KB -> %s"
+                  % (r["itens"], r["opcoes"], r["tamanho"] / 1024, r["arquivo"]))
+        QMessageBox.information(
+            self, "Checklist exportado",
+            "Arquivo gravado em:\n%s\n\n%d itens e %d opções de resposta.\n\n"
+            "Carregue este arquivo no aplicativo do celular. Sempre que editar "
+            "o checklist, exporte de novo para manter os dois iguais."
+            % (r["arquivo"], r["itens"], r["opcoes"]))
 
     # ── Importacao ────────────────────────────────────────────────────────
     def _escolher_arquivo(self):
