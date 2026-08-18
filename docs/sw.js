@@ -7,7 +7,7 @@
    de recorrer ao cache -- justamente onde o aplicativo precisa abrir na hora.
    Agora a pagina vem do cache imediatamente e, se houver rede, uma copia nova
    e baixada em silencio para a proxima abertura. */
-const CACHE = "nr10-campo-v6";
+const CACHE = "nr10-campo-v7";
 const ARQUIVOS = ["./", "./index.html"];
 
 self.addEventListener("install", ev => {
