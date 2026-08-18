@@ -11,9 +11,16 @@ Clientes/
 # Build
 dist/
 build/
-*.spec
-*.iss
 Output/
+
+# Specs gerados pelo PyInstaller sao descartaveis, mas GerLauNR10.spec e a
+# configuracao de build do projeto: sem ele, build_installer.bat nao roda em
+# outra maquina.
+*.spec
+!GerLauNR10.spec
+
+# O .iss e gerado por generate_iss.py a cada build
+*.iss
 
 # Python
 __pycache__/
