@@ -797,9 +797,13 @@ function _testarShare(rotulo, dados){
   }
 }
 $("#btn-t-zip").onclick = function (){
-  const b = new Uint8Array([80,75,5,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]);
+  // ZIP de verdade, com um arquivo dentro. A versao anterior deste teste
+  // mandava um ZIP vazio de 22 bytes, que o Android pode recusar por si so --
+  // dava falso negativo e nao dizia nada sobre o pacote real.
+  const cod = new TextEncoder();
+  const zip = criarZip([{nome:"teste.txt", dados:cod.encode("teste GerLauNR10")}]);
   _testarShare("Arquivo .zip",
-    {files:[new File([b], "teste.zip", {type:"application/zip"})]});
+    {files:[new File([zip], "teste.zip", {type:"application/zip"})]});
 };
 $("#btn-t-txt").onclick = function (){
   _testarShare("Arquivo .txt",
