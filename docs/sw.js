@@ -1,8 +1,13 @@
 /* Service worker do GerLauNR10 Campo.
-   Guarda a pagina em cache para que o aplicativo abra sem sinal -- situacao
-   normal numa subestacao ou galpao. Como o index.html e autocontido (estilos,
-   scripts, icones e manifest embutidos), basta cachear a propria pagina. */
-const CACHE = "nr10-campo-v1";
+
+   Estrategia: cache primeiro, revalidando em segundo plano.
+
+   A primeira versao buscava a rede antes do cache. Funcionava, mas em campo
+   sem sinal a abertura ficava presa esperando o tempo de espera da rede antes
+   de recorrer ao cache -- justamente onde o aplicativo precisa abrir na hora.
+   Agora a pagina vem do cache imediatamente e, se houver rede, uma copia nova
+   e baixada em silencio para a proxima abertura. */
+const CACHE = "nr10-campo-v2";
 const ARQUIVOS = ["./", "./index.html"];
 
 self.addEventListener("install", ev => {
@@ -21,15 +26,20 @@ self.addEventListener("activate", ev => {
 
 self.addEventListener("fetch", ev => {
   if (ev.request.method !== "GET") return;
-  // Rede primeiro, cache como reserva: assim uma versao nova publicada no
-  // GitHub Pages chega ao aparelho, sem perder o funcionamento offline.
+  if (new URL(ev.request.url).origin !== location.origin) return;
+
   ev.respondWith(
-    fetch(ev.request)
-      .then(resp => {
-        const copia = resp.clone();
-        caches.open(CACHE).then(c => c.put(ev.request, copia)).catch(() => {});
+    caches.match(ev.request).then(cacheado => {
+      const daRede = fetch(ev.request).then(resp => {
+        if (resp && resp.ok) {
+          const copia = resp.clone();
+          caches.open(CACHE).then(c => c.put(ev.request, copia)).catch(() => {});
+        }
         return resp;
-      })
-      .catch(() => caches.match(ev.request).then(r => r || caches.match("./index.html")))
+      }).catch(() => null);
+
+      // offline: responde do cache na hora; a promessa da rede falha em silencio
+      return cacheado || daRede.then(r => r || caches.match("./index.html"));
+    })
   );
 });

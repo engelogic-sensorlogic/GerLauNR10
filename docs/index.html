@@ -616,20 +616,41 @@ $("#btn-gerar").onclick = async () => {
                   + new Date().toISOString().slice(0,10) + ".gnr10";
     const kb = (zip.size/1024).toFixed(0);
 
-    const arq = new File([zip], nomeArq, {type:"application/zip"});
-    let extra = "";
-    if (navigator.canShare && navigator.canShare({files:[arq]})){
-      extra = "<button class='b-sec' style='width:100%;margin-top:8px' id='btn-share'>Compartilhar</button>";
-    }
+    // O Chrome no Android so compartilha arquivos cuja EXTENSAO ele reconhece.
+    // Uma extensao propria como .gnr10 e recusada por canShare(), mesmo com o
+    // tipo correto -- por isso tentamos tambem .zip, que e aceito. O conteudo e
+    // o mesmo ZIP nos dois casos, e o PC identifica o pacote pelo manifest
+    // interno, nao pela extensao.
+    const arqCompartilhavel = (() => {
+      for (const nome of [nomeArq, nomeArq.replace(/\.gnr10$/, ".zip")]) {
+        const f = new File([zip], nome, {type:"application/zip"});
+        try { if (navigator.canShare && navigator.canShare({files:[f]})) return f; }
+        catch(e){ /* navegador sem suporte a compartilhar arquivos */ }
+      }
+      return null;
+    })();
+
     const url = URL.createObjectURL(zip);
+    let extra;
+    if (arqCompartilhavel){
+      extra = "<button class='b-sec' style='width:100%;margin-top:8px' id='btn-share'>"
+            + "Compartilhar (WhatsApp, e-mail, Drive)</button>";
+    }else{
+      extra = "<div class='p' style='margin-top:8px'>Compartilhamento direto não "
+            + "disponível neste navegador. Toque em <b>Salvar arquivo</b>: ele vai "
+            + "para a pasta <b>Downloads</b> do aparelho, de onde você pode enviá-lo "
+            + "ou copiá-lo por cabo.</div>";
+    }
     cx.innerHTML = "<div class='aviso ok'>Pacote gerado: <b>" + nomeArq + "</b><br>"
                  + avaliacoes.length + " respostas, " + (arquivos.length-2) + " foto(s), "
                  + kb + " KB</div>"
                  + "<a href='" + url + "' download='" + nomeArq + "'>"
                  + "<button class='b-lar'>Salvar arquivo</button></a>" + extra;
     const bs = document.getElementById("btn-share");
-    if (bs) bs.onclick = () => navigator.share({files:[arq], title:nomeArq})
-                                 .catch(()=>{});
+    if (bs) bs.onclick = async () => {
+      try { await navigator.share({files:[arqCompartilhavel], title:nomeArq}); }
+      catch(e){ /* usuario cancelou */ }
+    };
   }catch(e){
     cx.innerHTML = "<div class='aviso erro'>Falha ao gerar: " + escapar(e.message) + "</div>";
   }

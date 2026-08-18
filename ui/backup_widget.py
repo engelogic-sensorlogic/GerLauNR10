@@ -366,9 +366,12 @@ class BackupWidget(QWidget):
 
     # ── Importacao ────────────────────────────────────────────────────────
     def _escolher_arquivo(self):
+        # .zip tambem entra no filtro: ao compartilhar do celular, o Android so
+        # aceita extensoes que reconhece e o pacote chega renomeado para .zip.
+        # O conteudo e o mesmo -- o tipo e identificado pelo manifest interno.
         caminho, _ = QFileDialog.getOpenFileName(
             self, "Selecionar pacote de dados", "",
-            "Pacote GerLauNR10 (*%s);;Todos os arquivos (*)" % backup.EXTENSAO)
+            "Pacote GerLauNR10 (*%s *.zip);;Todos os arquivos (*)" % backup.EXTENSAO)
         if not caminho:
             return
         try:
