@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QStatusBar, QSizePolicy
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
-from PyQt6.QtGui import QPixmap, QIcon, QFont
+from PyQt6.QtGui import QPixmap, QIcon, QFont, QPainter
 
 from ui.clientes_widget import ClientesWidget
 from ui.laudos_widget import LaudosWidget
@@ -22,11 +22,38 @@ from styles import COLORS
 # ---------------------------------------------------------------------------
 # Botão de navegação
 # ---------------------------------------------------------------------------
+NAV_ICON_SIZE = 26   # lado do icone da sidebar, em pixels logicos
+
+
+def emoji_icon(emoji: str, lado: int, dpr: float = 1.0) -> QIcon:
+    """Desenha um emoji como QIcon, para que ele possa ter tamanho proprio.
+
+    Os icones da sidebar eram emojis embutidos no texto do botao e por isso
+    herdavam o font-size de 13px do estilo nav_btn -- nao havia como aumenta-los
+    sem aumentar tambem o rotulo. Como QIcon, o tamanho passa a ser controlado
+    por setIconSize. O pixmap e gerado na resolucao fisica da tela para nao
+    borrar em telas com escalonamento de 125%/150%.
+    """
+    px = max(1, int(round(lado * dpr)))
+    pix = QPixmap(px, px)
+    pix.fill(Qt.GlobalColor.transparent)
+    pintor = QPainter(pix)
+    fonte = QFont("Segoe UI Emoji")
+    fonte.setPixelSize(int(px * 0.82))
+    pintor.setFont(fonte)
+    pintor.drawText(pix.rect(), Qt.AlignmentFlag.AlignCenter, emoji)
+    pintor.end()
+    pix.setDevicePixelRatio(dpr)
+    return QIcon(pix)
+
+
 class NavButton(QPushButton):
-    def __init__(self, icon_text: str, label: str, parent=None):
+    def __init__(self, icon_text: str, label: str, dpr: float = 1.0, parent=None):
         super().__init__(parent)
         self.setObjectName("nav_btn")
-        self.setText(f"  {icon_text}  {label}")
+        self.setIcon(emoji_icon(icon_text, NAV_ICON_SIZE, dpr))
+        self.setIconSize(QSize(NAV_ICON_SIZE, NAV_ICON_SIZE))
+        self.setText(f"  {label}")
         self.setCheckable(False)
         self.setMinimumHeight(48)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -120,8 +147,9 @@ class MainWindow(QMainWindow):
             ("⚙️", "Configurações"),
             ("🔧", "Dev Tools"),
         ]
+        _dpr = self.devicePixelRatioF()
         for i, (icon, label) in enumerate(nav_items):
-            btn = NavButton(icon, label)
+            btn = NavButton(icon, label, _dpr)
             btn.clicked.connect(lambda checked, idx=i: self._navigate(idx))
             self._nav_buttons.append(btn)
             sb_layout.addWidget(btn)
