@@ -15,13 +15,58 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY, TA_RIGHT
 from reportlab.lib.colors import HexColor, white, black, Color
 from reportlab.platypus import (
     BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, PageBreak,
-    Table, TableStyle, Image, KeepTogether, HRFlowable, FrameBreak
+    TableStyle, Image, KeepTogether, HRFlowable, FrameBreak
 )
 from reportlab.platypus.flowables import Flowable
 from reportlab import platypus
 from reportlab.pdfgen import canvas
+from reportlab.pdfbase.pdfmetrics import stringWidth
 
 BASE_DIR = Path(__file__).parent
+
+
+class Table(platypus.Table):
+    """Table que quebra a linha do texto que nao cabe na coluna.
+
+    O reportlab desenha uma celula de texto simples (str) numa linha so: um
+    texto mais largo que a coluna atravessa a borda e invade a celula vizinha.
+    Na hora de montar, cada celula str que nao cabe vira um Paragraph com a
+    mesma fonte, tamanho, cor e alinhamento da celula -- passa a quebrar
+    dentro da coluna. Celulas que ja cabem ficam exatamente como estavam.
+    """
+    _ALINHAMENTO = {"LEFT": TA_LEFT, "CENTER": TA_CENTER, "CENTRE": TA_CENTER,
+                    "RIGHT": TA_RIGHT, "DECIMAL": TA_RIGHT}
+
+    def _quebrar_celulas(self):
+        if getattr(self, "_celulas_quebradas", False):
+            return
+        self._celulas_quebradas = True
+        for i, linha in enumerate(self._cellvalues):
+            for j, valor in enumerate(linha):
+                largura = self._argW[j] if j < len(self._argW) else None
+                if not isinstance(valor, str) or not isinstance(largura, (int, float)):
+                    continue
+                cs = self._cellStyles[i][j]
+                livre = largura - cs.leftPadding - cs.rightPadding
+                partes = valor.split("\n")
+                if max(stringWidth(t, cs.fontname, cs.fontsize) for t in partes) <= livre:
+                    continue
+                # Nunca parte uma palavra ao meio ("Conforme-s"): se uma palavra
+                # sozinha nao cabe, a celula fica como estava.
+                if any(stringWidth(w, cs.fontname, cs.fontsize) > livre
+                       for t in partes for w in t.split()):
+                    continue
+                texto = "<br/>".join(t.replace("&", "&amp;").replace("<", "&lt;")
+                                     .replace(">", "&gt;") for t in partes)
+                estilo = ParagraphStyle(
+                    "_cel", fontName=cs.fontname, fontSize=cs.fontsize,
+                    leading=max(cs.leading, cs.fontsize * 1.2), textColor=cs.color,
+                    alignment=self._ALINHAMENTO.get(str(cs.alignment).upper(), TA_LEFT))
+                linha[j] = Paragraph(texto, estilo)
+
+    def wrap(self, availWidth, availHeight):
+        self._quebrar_celulas()
+        return super().wrap(availWidth, availHeight)
 
 # ── Paleta ────────────────────────────────────────────────────────────────────
 W, H     = A4
@@ -1506,55 +1551,74 @@ def gerar_laudo_pdf(
                             elif peso_v > 0:    pie_data[it["numero"]]["P"] += 1
                             else:               pie_data[it["numero"]]["N"] += 1
 
-                    COLS = 3
-                    n_items = len(checklist_items)
-                    n_rows = (n_items + COLS - 1) // COLS
-                    fig3, axes = plt.subplots(n_rows, COLS, figsize=(10, n_rows * 3.6))
-                    if n_rows == 1:
-                        axes = list(axes) if COLS > 1 else [axes]
-                    else:
-                        axes = [ax for row in axes for ax in (list(row) if COLS > 1 else [row])]
+                    # Ate 6 graficos por folha, em 2 colunas. A figura e desenhada no
+                    # tamanho real em que sai no PDF (sem bbox "tight"), entao o
+                    # tamanho de fonte do matplotlib e o tamanho impresso.
+                    import textwrap as _tw
+                    from matplotlib.patches import Patch
                     pie_cols = ["#1a7f37", "#e8820c", "#b91c1c"]
                     pie_lbls = ["Conforme", "Parcial", "Não conf."]
-                    for idx, it in enumerate(checklist_items):
-                        ax = axes[idx]
-                        d = pie_data[it["numero"]]
-                        vals = [d["C"], d["P"], d["N"]]
-                        total = sum(vals)
-                        if total == 0:
-                            ax.pie([1], colors=["#e0e0e0"])
-                            ax.set_title("Item %02d\n(sem resposta)" % it["numero"],
-                                         fontsize=8, color="#888")
-                        else:
-                            nz = [(v,c,l) for v,c,l in zip(vals, pie_cols, pie_lbls) if v > 0]
-                            _v = [x[0] for x in nz]
-                            _c = [x[1] for x in nz]
-                            _l = ["%s\n(%d)" % (x[2], x[0]) for x in nz]
-                            wedges, texts, auts = ax.pie(
-                                _v, labels=_l, colors=_c,
-                                autopct=lambda p: ("%.0f%%" % p) if p > 0 else "",
-                                startangle=90, textprops={"fontsize": 7},
-                                wedgeprops={"linewidth": 0.5, "edgecolor": "white"})
-                            for at in auts:
-                                at.set_fontsize(7)
-                                at.set_fontweight("bold")
-                                at.set_color("white")
-                            import textwrap as _tw
-                            q_s = _tw.fill(it["questao"], width=30)
-                            ax.set_title("Item %02d\n%s" % (it["numero"], q_s),
-                                         fontsize=7, fontweight="bold", color="#1a1a1a", pad=4)
-                    for idx in range(n_items, len(axes)):
-                        axes[idx].set_visible(False)
-                    plt.tight_layout(pad=1.2)
-                    buf3 = BytesIO()
-                    plt.savefig(buf3, format="png", dpi=150, bbox_inches="tight")
-                    plt.close(fig3)
-                    buf3.seek(0)
-                    _pie_w = 16 * cm
-                    _pie_h = _pie_w * (n_rows * 3.6 / 10.0)
-                    chart3 = Image(buf3, width=_pie_w, height=_pie_h)
-                    chart3.hAlign = "CENTER"
-                    story.append(chart3)
+                    _cm = 1 / 2.54
+                    _fig_w, _cel_h = 17.0, 7.4         # cm: largura da figura, altura da celula
+                    _tit_h, _diam = 1.9, 4.2           # cm: faixa do titulo, diametro da pizza
+                    _por_folha = 6
+
+                    def _folha_pizzas(itens):
+                        linhas = (len(itens) + 1) // 2
+                        fig_h = linhas * _cel_h
+                        fig = plt.figure(figsize=(_fig_w * _cm, fig_h * _cm))
+                        for k, it in enumerate(itens):
+                            lin, col = divmod(k, 2)
+                            sozinho = (k == len(itens) - 1 and len(itens) % 2 == 1)
+                            cx = _fig_w / 2 if sozinho else _fig_w * (0.25 + 0.5 * col)
+                            topo = fig_h - lin * _cel_h
+                            q_s = _tw.fill(it["questao"], width=46)
+                            fig.text(cx / _fig_w, (topo - 0.15) / fig_h,
+                                     "Item %02d\n%s" % (it["numero"], q_s),
+                                     ha="center", va="top", fontsize=9, color="#1a1a1a",
+                                     linespacing=1.35)
+                            base = topo - _tit_h - _diam
+                            ax = fig.add_axes([(cx - _diam / 2) / _fig_w, base / fig_h,
+                                               _diam / _fig_w, _diam / fig_h])
+                            d = pie_data[it["numero"]]
+                            vals = [d["C"], d["P"], d["N"]]
+                            if sum(vals) == 0:
+                                ax.pie([1], colors=["#e0e0e0"])
+                                legenda = [Patch(color="#e0e0e0", label="Sem resposta")]
+                            else:
+                                nz = [(v, c, l) for v, c, l in zip(vals, pie_cols, pie_lbls) if v > 0]
+                                _w, _t, auts = ax.pie(
+                                    [x[0] for x in nz], colors=[x[1] for x in nz],
+                                    autopct=lambda pc: ("%.0f%%" % pc) if pc > 0 else "",
+                                    startangle=90,
+                                    wedgeprops={"linewidth": 0.5, "edgecolor": "white"})
+                                for at in auts:
+                                    at.set_fontsize(9)
+                                    at.set_fontweight("bold")
+                                    at.set_color("white")
+                                legenda = [Patch(color=c, label="%s (%d)" % (l, v)) for v, c, l in nz]
+                            ax.set_aspect("equal")
+                            # Legenda centralizada sob o circulo, com respiro entre os dois
+                            ax.legend(handles=legenda, loc="upper center",
+                                      bbox_to_anchor=(0.5, -0.06), ncol=len(legenda),
+                                      frameon=False, fontsize=9, handlelength=1.0,
+                                      handletextpad=0.4, columnspacing=1.2)
+                        buf = BytesIO()
+                        fig.savefig(buf, format="png", dpi=200)
+                        plt.close(fig)
+                        buf.seek(0)
+                        img = Image(buf, width=_fig_w * cm, height=fig_h * cm)
+                        img.hAlign = "CENTER"
+                        return img
+
+                    for k in range(0, len(checklist_items), _por_folha):
+                        if k > 0:
+                            # Continuacao sem _toc_key: o sumario aponta o inicio do 7.1
+                            story.append(PageBreak())
+                            story.append(Paragraph("7.1  Avaliação de Conformidades (continuação)",
+                                                   styles["subsecao"]))
+                            add_spacer(0.2)
+                        story.append(_folha_pizzas(checklist_items[k:k + _por_folha]))
 
             except ImportError:
                 story.append(Paragraph(
@@ -1565,13 +1629,16 @@ def gerar_laudo_pdf(
             story.append(PageBreak())
             add_subsection("7.2", "Resumo Estatístico por Item")
             stat_data = [["Item", "Questão (resumo)", "Conformes", "Parciais", "Não conf.", "Média"]]
+            # Mesma fonte da tabela (8 pt), justificada dentro da coluna de 8 cm
+            _st_questao = ParagraphStyle("_stq", parent=styles["body"], fontSize=8,
+                                         leading=10, alignment=TA_JUSTIFY, spaceAfter=0)
             for it in checklist_items:
                 stats = estatisticas["item_stats"].get(it["numero"], {})
                 cont = stats.get("contagens", {})
                 media = float(stats.get("media") or 0.0)
                 stat_data.append([
                     str(it["numero"]),
-                    it["questao"][:45] + ("..." if len(it["questao"]) > 45 else ""),
+                    Paragraph(it["questao"], _st_questao),
                     str(cont.get("Sim", 0)),
                     str(cont.get("Parcial", 0)),
                     str(cont.get("Não", 0)),
