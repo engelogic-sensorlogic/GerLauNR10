@@ -23,7 +23,7 @@ from ui.main_window import MainWindow
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("GerLauNR10")
-    app.setApplicationVersion("1.0.0")
+    app.setApplicationVersion("1.1.0")
     app.setOrganizationName("Engelogic")
     app.setOrganizationDomain("engelogic.com.br")
 
