@@ -244,9 +244,32 @@ class LaudoCanvas(canvas.Canvas):
         self.setFillColor(C_WHITE)
         self.setFont("Helvetica", 8)
         self.drawString(MARGIN_L, 0.32 * cm,
-                        "ENGELOGIC Automação e Controle Industrial  |  www.engelogic.com.br")
+                        "ENGELOGIC Automação e Controle Industrial  |  SENSORLOGIC Serviços Ltda"
+                        "  |  www.engelogic.com.br")
         self.drawRightString(W - MARGIN_R, 0.32 * cm, "Página %d" % self._pageNumber)
         self.restoreState()
+
+
+class NotaFinalPagina(Flowable):
+    """Linha de texto presa ao pe da pagina em que cair, logo acima do rodape.
+
+    Tem altura zero: nunca forca quebra de pagina, entao a nota fica sempre na
+    ultima pagina do laudo, mesmo quando ela esta cheia. O texto e desenhado na
+    faixa livre entre o fim da area util (MARGIN_B) e a barra do rodape.
+    """
+    def __init__(self, texto, estilo):
+        super().__init__()
+        self.texto, self.estilo = texto, estilo
+
+    def wrap(self, aw, ah):
+        return 0, 0
+
+    def drawOn(self, canv, x, y, _sW=0):
+        p = Paragraph(self.texto, self.estilo)
+        _, h = p.wrap(W - MARGIN_L - MARGIN_R, MARGIN_B)
+        # Centrado na faixa entre o topo da barra do rodape (0,9 cm) e MARGIN_B
+        y0 = 0.9 * cm + (MARGIN_B - 0.9 * cm - h) / 2
+        p.drawOn(canv, MARGIN_L, y0)
 
 
 class SectionHeader(Flowable):
@@ -430,22 +453,72 @@ def gerar_laudo_pdf(
             prog(5, "Gerando capa...")
             story.append(Spacer(1, 2 * cm))
 
-            # Logo Engelogic
+            # Logos Engelogic e Sensorlogic
+            def _logo_capa(caminho, max_w, max_h):
+                from PIL import Image as PILImage
+                with PILImage.open(caminho) as _pi:
+                    lw, lh = _pi.size
+                r = lh / lw if lw else 1.0
+                if max_w * r <= max_h:
+                    fw, fh = max_w, max_w * r
+                else:
+                    fh, fw = max_h, max_h / r
+                return Image(caminho, width=fw, height=fh)
+
+            def _logo_sensorlogic(caminho, eng_img):
+                """Logo da Sensorlogic com a mesma altura do da Engelogic.
+
+                As margens transparentes do PNG sao recortadas (senao o
+                desenho sai menor que o vizinho) e a transparencia e mantida.
+                A altura nunca passa a do logo da Engelogic: a linha dos logos
+                nao cresce e a capa mantem a paginacao.
+                """
+                import io
+                from PIL import Image as PILImage
+                with PILImage.open(caminho) as _pi:
+                    im = _pi.convert("RGBA")
+                caixa = im.getchannel("A").getbbox()
+                if caixa:
+                    im = im.crop(caixa)
+                if im.width > 1200:     # resolucao de sobra para 8 cm; PDF menor
+                    im = im.resize((1200, max(1, round(im.height * 1200 / im.width))),
+                                   PILImage.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, format="PNG")
+                buf.seek(0)
+                fh = eng_img.drawHeight
+                fw = fh * im.width / im.height
+                if fw > 8.0 * cm:
+                    fw, fh = 8.0 * cm, 8.0 * cm * im.height / im.width
+                return Image(buf, width=fw, height=fh)
+
             logo_path = str(BASE_DIR / "resources" / "logo_engelogic.png")
+            sensor_path = str(BASE_DIR / "resources" / "logo_sensorlogic.png")
             if os.path.exists(logo_path):
                 try:
-                    from PIL import Image as PILImage
-                    with PILImage.open(logo_path) as _pi:
-                        lw, lh = _pi.size
-                    r = lh / lw if lw else 1.0
-                    max_w, max_h = 8.0 * cm, 3.2 * cm
-                    if max_w * r <= max_h:
-                        fw, fh = max_w, max_w * r
+                    logo_img = _logo_capa(logo_path, 8.0 * cm, 3.2 * cm)
+                    sensor_img = None
+                    if os.path.exists(sensor_path):
+                        try:
+                            sensor_img = _logo_sensorlogic(sensor_path, logo_img)
+                        except Exception:
+                            sensor_img = None
+                    if sensor_img is None:
+                        logo_img.hAlign = "CENTER"
+                        story.append(logo_img)
                     else:
-                        fh, fw = max_h, max_h / r
-                    logo_img = Image(logo_path, width=fw, height=fh)
-                    logo_img.hAlign = "CENTER"
-                    story.append(logo_img)
+                        linha = Table([[logo_img, sensor_img]],
+                                      colWidths=[_AW / 2, _AW / 2],
+                                      rowHeights=[logo_img.drawHeight])
+                        linha.setStyle(TableStyle([
+                            ("ALIGN",         (0,0),(-1,-1), "CENTER"),
+                            ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+                            ("LEFTPADDING",   (0,0),(-1,-1), 0),
+                            ("RIGHTPADDING",  (0,0),(-1,-1), 0),
+                            ("TOPPADDING",    (0,0),(-1,-1), 0),
+                            ("BOTTOMPADDING", (0,0),(-1,-1), 0),
+                        ]))
+                        story.append(linha)
                 except Exception:
                     pass
             add_spacer(1.6)  # espacamento duplo (logo -> titulo)
@@ -516,7 +589,7 @@ def gerar_laudo_pdf(
             add_spacer(1.2)  # emitido em -> rodape ENGELOGIC
 
             # Rodape da capa
-            razao_eng = "ENGELOGIC Automação e Controle Industrial"
+            razao_eng = "ENGELOGIC Automação e Controle Industrial  |  SENSORLOGIC Serviços Ltda"
             eng_info = Table([[
                 Paragraph(razao_eng, styles["center_white"]),
             ]], colWidths=[_AW])
@@ -792,7 +865,8 @@ def gerar_laudo_pdf(
 
             add_subsection("3.5", "Suporte Técnico")
             story.append(Paragraph(
-                "A ENGELOGIC AUTOMAÇÃO E CONTROLE INDUSTRIAL LTDA mantém-se à inteira disposição do "
+                "A ENGELOGIC AUTOMAÇÃO E CONTROLE INDUSTRIAL LTDA e a SENSORLOGIC SERVIÇOS LTDA "
+                "mantêm-se à inteira disposição do "
                 "cliente para prestar o suporte técnico necessário à implementação das medidas "
                 "recomendadas neste laudo, bem como para a execução das correções, adequações e "
                 "melhorias que se fizerem necessárias nas instalações elétricas, contribuindo para o "
@@ -1729,8 +1803,6 @@ def gerar_laudo_pdf(
 
         # ── ASSINATURAS ──────────────────────────────────────────────────────────────
         if opcoes.get("assinaturas", True):
-            story.append(PageBreak())
-
             profissionais_lc = db.profissionais_do_laudo(laudo_id)
             participantes_lc = db.participantes_do_laudo(laudo_id)
 
@@ -1775,10 +1847,11 @@ def gerar_laudo_pdf(
             _note_h     = 1.0 * cm
             _row_h = ((H - MARGIN_T - MARGIN_B) - _top_gap - _bottom_gap - _note_h) / _n_rows
 
+            # Sem assinantes nao ha pagina de assinaturas: a nota da MP 2200-2
+            # vai para o pe da ultima pagina do conteudo, sem folha em branco.
             if signatarios:
                 for start in range(0, len(signatarios), _n_cols * _n_rows):
-                    if start > 0:
-                        story.append(PageBreak())
+                    story.append(PageBreak())
                     add_spacer(_top_gap / cm)
                     grupo = signatarios[start:start + _n_cols * _n_rows]
                     grid_data = []
@@ -1796,11 +1869,8 @@ def gerar_laudo_pdf(
                         ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
                     ]))
                     story.append(sig_tbl)
-            else:
-                add_spacer(_top_gap / cm)
 
-            add_spacer(_bottom_gap / cm)
-            story.append(Paragraph(
+            story.append(NotaFinalPagina(
                 "Documento poderá ser assinado de forma eletrônica, nos termos da MP 2200-2/2001",
                 ParagraphStyle("_mp2200", parent=styles["obs"], alignment=TA_CENTER)))
 

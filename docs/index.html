@@ -97,6 +97,16 @@
   .ok{background:#e9f7ee; border-color:#a8dbbb}
   .erro{background:#fdeaea; border-color:#e8b4b4; color:var(--verm)}
   .oculto{display:none}
+
+  /* ---- lista de paineis ---- */
+  .pn{display:flex; justify-content:space-between; align-items:center; gap:10px;
+      padding:12px; border:1px solid var(--borda); border-radius:8px;
+      margin-bottom:8px; background:#f6f8fa; cursor:pointer}
+  .pn.on{background:#fff3e0; border:2px solid var(--laranja)}
+  .pn b{display:block; font-size:15px}
+  .pn .set{font-size:12px; color:var(--secun)}
+  .pn-st{font-size:12px; color:var(--secun); text-align:right; white-space:nowrap}
+  .pn .gerado{color:var(--verde); font-weight:600}
   .p{font-size:13px; color:var(--secun); line-height:1.45}
 </style>
 </head>
@@ -131,6 +141,16 @@
     <button class="b-sec" style="width:100%" onclick="document.getElementById('f-checklist').click()">
       Carregar checklist do PC
     </button>
+  </div>
+
+  <div class="card">
+    <h2>Painéis neste aparelho</h2>
+    <div class="p" style="margin-bottom:10px">
+      Cada painel tem seu próprio checklist e suas fotos. Toque em um painel
+      para abrir e continuar o preenchimento.
+    </div>
+    <div id="lista-paineis"></div>
+    <button class="b-sec" style="width:100%" id="btn-novo">+ Novo painel</button>
   </div>
 
   <div class="card">
@@ -191,13 +211,16 @@
       Configurações &rsaquo; Backup &rsaquo; Importar.
       As fotos são reduzidas automaticamente para manter o arquivo leve.
     </div>
-    <button class="b-lar" id="btn-gerar">Gerar pacote do painel</button>
+    <button class="b-lar" id="btn-gerar">Gerar pacote deste painel</button>
+    <button class="b-sec" style="width:100%;margin-top:10px" id="btn-gerar-todos">
+      Gerar pacote com todos os painéis
+    </button>
     <div id="res-gerar"></div>
   </div>
   <div class="card">
     <h2>Atualizar aplicativo</h2>
     <div class="p" style="margin-bottom:10px">
-      Busca a versão mais recente publicada. O painel em preenchimento e o
+      Busca a versão mais recente publicada. Os painéis em preenchimento e o
       checklist carregado são preservados.
     </div>
     <button class="b-sec" style="width:100%" id="btn-atualizar">Atualizar aplicativo</button>
@@ -205,12 +228,15 @@
   </div>
 
   <div class="card">
-    <h2>Recomeçar</h2>
+    <h2>Excluir painéis</h2>
     <div class="p" style="margin-bottom:10px">
-      Apaga o painel atual do aparelho para começar outro. Gere e salve o
-      arquivo antes.
+      Remove painéis do aparelho. Gere e salve o arquivo antes: o que for
+      excluído não pode ser recuperado.
     </div>
-    <button class="b-perigo" style="width:100%" id="btn-limpar">Limpar e iniciar novo painel</button>
+    <button class="b-perigo" style="width:100%" id="btn-limpar">Excluir este painel</button>
+    <button class="b-perigo" style="width:100%;margin-top:10px" id="btn-limpar-todos">
+      Excluir todos os painéis
+    </button>
   </div>
 </section>
 
@@ -241,8 +267,28 @@ const QUALIDADE = 0.8;      // JPEG
 const MAX_FOTOS_ITEM = 4;
 
 let checklist = null;                       // {itens:[{numero,questao,opcoes:[]}]}
-let estado = { painel:{}, respostas:{}, ident:{}, fotos:{} };
+
+// Varios paineis por aparelho. Cada um fica numa chave propria do IndexedDB
+// ("painel:<id>"): digitar num campo regrava so o painel aberto, nao as
+// fotos de todos. "estado" aponta sempre para o painel aberto na tela.
+let paineis = {};                           // id -> painel
+let ordem = [];                             // ids, na ordem de criacao
+let estado = novoPainel();
 let bd = null;
+
+function novoPainel(){
+  return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+           painel:{ data:new Date().toISOString().slice(0,10) },
+           respostas:{}, ident:{}, fotos:{}, gerado_em:"" };
+}
+function completar(p){
+  return Object.assign({painel:{}, respostas:{}, ident:{}, fotos:{}, gerado_em:""}, p);
+}
+function painelUsado(p){
+  return !!((p.painel.tag || "").trim() || Object.keys(p.respostas).length
+            || Object.keys(p.ident).length
+            || Object.values(p.fotos).some(l => l.length));
+}
 
 function abrirBD(){
   return new Promise((ok, erro) => {
@@ -275,8 +321,25 @@ function ler(chave){
     }catch(e){ ok(undefined); }
   });
 }
-async function salvarTudo(){
-  await guardar("estado", estado);
+function apagar(chave){
+  if (!bd) return Promise.resolve();
+  return new Promise((ok) => {
+    try{
+      const tx = bd.transaction("kv", "readwrite");
+      tx.objectStore("kv").delete(chave);
+      tx.oncomplete = ok; tx.onerror = ok;
+    }catch(e){ ok(); }
+  });
+}
+// alterou=false: so troca de painel ou carga, sem edicao. Qualquer edicao
+// tira a marca "arquivo gerado", que passaria a ser falsa.
+async function salvarTudo(alterou = true){
+  if (alterou && estado.gerado_em){
+    estado.gerado_em = "";
+    montarListaPaineis();
+  }
+  await guardar("painel:" + estado.id, estado);
+  await guardar("indice", {ordem, atual:estado.id});
   if (checklist) await guardar("checklist", checklist);
 }
 
@@ -400,7 +463,7 @@ $("#f-checklist").onchange = async ev => {
     if (dados.formato !== "gerlaunr10-checklist") throw new Error("Arquivo não é um checklist do GerLauNR10.");
     if (!Array.isArray(dados.itens) || !dados.itens.length) throw new Error("Checklist vazio.");
     checklist = dados;
-    await salvarTudo();
+    await salvarTudo(false);
     aplicarChecklist();
   }catch(e){
     $("#cl-estado").className = "aviso erro";
@@ -409,7 +472,7 @@ $("#f-checklist").onchange = async ev => {
 };
 function aplicarChecklist(){
   const n = checklist.itens.length;
-  $("#sub").textContent = n + " perguntas carregadas";
+  atualizarCabecalho();
   $("#cl-estado").className = "aviso ok";
   $("#cl-estado").innerHTML = "Checklist carregado: <b>" + n + " perguntas</b>."
       + (checklist.gerado_em ? " Exportado em " + checklist.gerado_em.replace("T"," ") + "." : "");
@@ -535,7 +598,60 @@ function atualizarProgresso(){
   const p = total ? Math.round(feitos / total * 100) : 0;
   $("#barra").style.width = p + "%";
   $("#pct").textContent = total ? p + "%" : "—";
+  montarListaPaineis();
 }
+
+/* ---- lista de paineis ---- */
+function contagem(p){
+  return { total: checklist ? checklist.itens.length : 0,
+           feitos: Object.keys(p.respostas).length,
+           fotos: Object.values(p.fotos).reduce((s,l) => s + l.length, 0)
+                  + Object.keys(p.ident).length };
+}
+function atualizarCabecalho(){
+  const tag = (estado.painel.tag || "").trim() || "sem TAG";
+  $("#sub").textContent =
+      (checklist ? checklist.itens.length + " perguntas" : "Checklist não carregado")
+    + " · Painel " + (ordem.indexOf(estado.id) + 1) + " de " + ordem.length + ": " + tag;
+}
+function montarListaPaineis(){
+  const cx = $("#lista-paineis");
+  cx.innerHTML = "";
+  ordem.forEach((id, i) => {
+    const p = paineis[id], c = contagem(p);
+    const d = document.createElement("div");
+    d.className = "pn" + (id === estado.id ? " on" : "");
+    d.innerHTML =
+        "<div><b>" + (i + 1) + ". " + (escapar((p.painel.tag || "").trim()) || "(sem TAG)")
+      + "</b><span class='set'>" + (escapar(p.painel.setor) || "sem setor") + "</span></div>"
+      + "<div class='pn-st'>" + c.feitos + "/" + c.total + " respostas<br>" + c.fotos + " foto(s)"
+      + (p.gerado_em ? "<br><span class='gerado'>✓ arquivo gerado</span>" : "") + "</div>";
+    d.onclick = () => trocarPainel(id);
+    cx.appendChild(d);
+  });
+  atualizarCabecalho();
+}
+function mostrarPainel(){
+  CAMPOS.forEach(id => document.getElementById(id).value = estado.painel[id] || "");
+  if (checklist) montarItens();
+  montarIdent();
+  atualizarProgresso();
+  $("#res-gerar").innerHTML = "";
+}
+async function trocarPainel(id){
+  estado = paineis[id];
+  await salvarTudo(false);
+  mostrarPainel();
+  irPara(0);
+}
+$("#btn-novo").onclick = async () => {
+  const p = novoPainel();
+  paineis[p.id] = p; ordem.push(p.id); estado = p;
+  await salvarTudo(false);
+  mostrarPainel();
+  irPara(0);
+  document.getElementById("tag").focus();
+};
 
 /* ---- campos do painel ---- */
 const CAMPOS = ["tag","setor","tipo","tforca","tcomando","fases","data","descricao"];
@@ -543,7 +659,10 @@ CAMPOS.forEach(id => {
   const el = document.getElementById(id);
   // o <select> do tipo de painel notifica por "change", nao por "input"
   ["input", "change"].forEach(ev =>
-    el.addEventListener(ev, () => { estado.painel[id] = el.value; salvarTudo(); }));
+    el.addEventListener(ev, () => {
+      estado.painel[id] = el.value; salvarTudo();
+      if (id === "tag" || id === "setor") montarListaPaineis();
+    }));
 });
 
 function montarResumo(){
@@ -563,17 +682,92 @@ function montarResumo(){
     + (faltando.length
         ? "<span style='color:#b91c1c'>Pendências: " + faltando.join("; ") + "</span>"
         : "<span style='color:#1a7f37'>Pronto para gerar.</span>");
+
+  const usados = ordem.map(id => paineis[id]).filter(painelUsado);
+  $("#btn-gerar-todos").textContent =
+      "Gerar pacote com todos os painéis (" + usados.length + ")";
+  if (ordem.length > 1){
+    $("#resumo").innerHTML += "<br><br><b>Todos os painéis neste aparelho</b><br>"
+      + ordem.map((id, i) => {
+          const p = paineis[id], c = contagem(p);
+          return (i + 1) + ". " + (escapar((p.painel.tag || "").trim()) || "(sem TAG)")
+               + " &middot; " + c.feitos + "/" + c.total + " respostas, " + c.fotos + " foto(s)"
+               + (p.gerado_em ? " &middot; <span style='color:#1a7f37'>gerado</span>" : "");
+        }).join("<br>");
+  }
 }
 function escapar(s){
   return (s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 }
 
 /* ---- geracao do pacote ---- */
-$("#btn-gerar").onclick = async () => {
+async function painelParaPacote(p, guardarFoto){
+  const ident = {};
+  for (const [chave] of ANGULOS)
+    ident[chave] = p.ident[chave] ? await guardarFoto(p.ident[chave]) : "";
+
+  const avaliacoes = [], evidencias = [];
+  for (const it of checklist.itens){
+    const n = it.numero;
+    if (p.respostas[n]){
+      // Sem peso e sem textos padrao: o PC resolve isso na importacao,
+      // a partir do proprio checklist dele.
+      avaliacoes.push({
+        item_numero: n,
+        opcao_descricao: p.respostas[n],
+        observacoes: (p.painel["obs_" + n] || "").trim(),
+        acao_corretiva: ""
+      });
+    }
+    for (const b of (p.fotos[n] || []))
+      evidencias.push({item_numero:n, arquivo:await guardarFoto(b), legenda:""});
+  }
+
+  return {
+    formulario_num: null,           // o PC atribui o proximo numero livre
+    tag: (p.painel.tag||"").trim(),
+    setor: (p.painel.setor||"").trim(),
+    tipo_painel: (p.painel.tipo||"").trim(),
+    tensao_forca: (p.painel.tforca||"").trim(),
+    tensao_comando: (p.painel.tcomando||"").trim(),
+    num_fases: (p.painel.fases||"").trim(),
+    descricao: (p.painel.descricao||"").trim(),
+    data_avaliacao: p.painel.data || new Date().toISOString().slice(0,10),
+    fotos_identificacao: ident,
+    avaliacoes: avaliacoes,
+    evidencias: evidencias
+  };
+}
+
+// Um painel gera o pacote "painel" de sempre; varios geram o pacote "paineis",
+// importado de uma vez no PC para dentro do laudo escolhido.
+async function gerarPacote(lista){
   const cx = $("#res-gerar");
   if (!checklist){ cx.innerHTML = "<div class='aviso erro'>Carregue o checklist antes.</div>"; return; }
-  const tag = (estado.painel.tag || "").trim();
-  if (!tag){ cx.innerHTML = "<div class='aviso erro'>Informe a TAG do painel.</div>"; return; }
+  if (!lista.length){
+    cx.innerHTML = "<div class='aviso erro'>Nenhum painel preenchido para gerar.</div>"; return;
+  }
+  const posicao = p => ordem.indexOf(p.id) + 1;
+  const semTag = lista.filter(p => !(p.painel.tag || "").trim());
+  if (semTag.length){
+    cx.innerHTML = "<div class='aviso erro'>" + (lista.length === 1
+        ? "Informe a TAG do painel."
+        : "Informe a TAG do(s) painel(is) nº " + semTag.map(posicao).join(", ") + ".")
+      + "</div>";
+    return;
+  }
+  // TAG repetida no mesmo pacote: no PC um substituiria o outro
+  const vistas = {};
+  for (const p of lista){
+    const k = p.painel.tag.trim().toLowerCase();
+    if (vistas[k]){
+      cx.innerHTML = "<div class='aviso erro'>TAG repetida: <b>" + escapar(p.painel.tag.trim())
+        + "</b> (painéis nº " + posicao(vistas[k]) + " e " + posicao(p) + "). "
+        + "Corrija uma delas antes de gerar.</div>";
+      return;
+    }
+    vistas[k] = p;
+  }
 
   cx.innerHTML = "<div class='aviso'>Gerando…</div>";
   try{
@@ -588,55 +782,34 @@ $("#btn-gerar").onclick = async () => {
       return nome;
     };
 
-    const ident = {};
-    for (const [chave] of ANGULOS)
-      ident[chave] = estado.ident[chave] ? await guardarFoto(estado.ident[chave]) : "";
+    const pacotes = [];
+    for (const p of lista) pacotes.push(await painelParaPacote(p, guardarFoto));
+    const nAval = pacotes.reduce((s, p) => s + p.avaliacoes.length, 0);
+    const unico = pacotes.length === 1;
+    const hoje = new Date().toISOString().slice(0,10);
 
-    const avaliacoes = [], evidencias = [];
-    for (const it of checklist.itens){
-      const n = it.numero;
-      if (estado.respostas[n]){
-        // Sem peso e sem textos padrao: o PC resolve isso na importacao,
-        // a partir do proprio checklist dele.
-        avaliacoes.push({
-          item_numero: n,
-          opcao_descricao: estado.respostas[n],
-          observacoes: (estado.painel["obs_" + n] || "").trim(),
-          acao_corretiva: ""
-        });
-      }
-      for (const b of (estado.fotos[n] || []))
-        evidencias.push({item_numero:n, arquivo:await guardarFoto(b), legenda:""});
-    }
-
-    const painel = {
-      formulario_num: null,           // o PC atribui o proximo numero livre
-      tag: tag,
-      setor: (estado.painel.setor||"").trim(),
-      tipo_painel: (estado.painel.tipo||"").trim(),
-      tensao_forca: (estado.painel.tforca||"").trim(),
-      tensao_comando: (estado.painel.tcomando||"").trim(),
-      num_fases: (estado.painel.fases||"").trim(),
-      descricao: (estado.painel.descricao||"").trim(),
-      data_avaliacao: estado.painel.data || new Date().toISOString().slice(0,10),
-      fotos_identificacao: ident,
-      avaliacoes: avaliacoes,
-      evidencias: evidencias
-    };
     const manifest = {
-      formato:"gerlaunr10-backup", versao:1, tipo:"painel",
+      formato:"gerlaunr10-backup", versao:1, tipo: unico ? "painel" : "paineis",
       gerado_em:new Date().toISOString().slice(0,19),
       aplicativo:"GerLauNR10 Campo",
-      resumo:{painel:tag, cliente:"", avaliacoes:avaliacoes.length}
+      resumo: unico
+        ? {painel:pacotes[0].tag, cliente:"", avaliacoes:nAval}
+        : {paineis:pacotes.length, tags:pacotes.map(p => p.tag), cliente:"", avaliacoes:nAval}
     };
     const cod = new TextEncoder();
-    arquivos.unshift({nome:"dados.json", dados:cod.encode(JSON.stringify({painel}))});
+    const dados = unico ? {painel:pacotes[0]} : {paineis:pacotes};
+    arquivos.unshift({nome:"dados.json", dados:cod.encode(JSON.stringify(dados))});
     arquivos.unshift({nome:"manifest.json", dados:cod.encode(JSON.stringify(manifest))});
 
     const zip = criarZip(arquivos);
-    const nomeArq = "Painel_" + tag.replace(/[^\w\-]+/g,"_") + "_"
-                  + new Date().toISOString().slice(0,10) + ".gnr10";
+    const nomeArq = (unico
+        ? "Painel_" + pacotes[0].tag.replace(/[^\w\-]+/g,"_")
+        : "Paineis_" + pacotes.length) + "_" + hoje + ".gnr10";
     const kb = (zip.size/1024).toFixed(0);
+
+    const agora = new Date().toISOString().slice(0,19);
+    for (const p of lista){ p.gerado_em = agora; await guardar("painel:" + p.id, p); }
+    montarListaPaineis(); montarResumo();
 
     // O Chrome no Android so compartilha arquivos cuja EXTENSAO ele reconhece.
     // Uma extensao propria como .gnr10 e recusada por canShare(), mesmo com o
@@ -659,7 +832,8 @@ $("#btn-gerar").onclick = async () => {
     // fica fixa na tela, com os dois caminhos que sempre funcionam.
     cx.innerHTML =
         "<div class='aviso ok'>Pacote gerado: <b>" + escapar(nomeSalvar) + "</b><br>"
-      + avaliacoes.length + " respostas, " + (arquivos.length-2) + " foto(s), "
+      + (unico ? "" : pacotes.length + " painéis, ")
+      + nAval + " respostas, " + (arquivos.length-2) + " foto(s), "
       + kb + " KB</div>"
       + "<a href='" + url + "' download='" + escapar(nomeSalvar) + "'>"
       + "<button class='b-lar'>Salvar arquivo</button></a>"
@@ -676,7 +850,10 @@ $("#btn-gerar").onclick = async () => {
   }catch(e){
     cx.innerHTML = "<div class='aviso erro'>Falha ao gerar: " + escapar(e.message) + "</div>";
   }
-};
+}
+$("#btn-gerar").onclick = () => gerarPacote([estado]);
+$("#btn-gerar-todos").onclick = () =>
+  gerarPacote(ordem.map(id => paineis[id]).filter(painelUsado));
 
 $("#btn-instalar").onclick = async () => {
   if (!promptInstalar) return;
@@ -712,15 +889,29 @@ $("#btn-atualizar").onclick = async () => {
   }
 };
 
-$("#btn-limpar").onclick = async () => {
-  if (!confirm("Apagar o painel atual do aparelho? O checklist continua carregado.")) return;
-  estado = { painel:{}, respostas:{}, ident:{}, fotos:{} };
-  await salvarTudo();
-  CAMPOS.forEach(id => document.getElementById(id).value = "");
-  if (checklist) montarItens();
-  montarIdent(); atualizarProgresso(); montarResumo();
-  $("#res-gerar").innerHTML = "";
+async function excluirPaineis(ids){
+  for (const id of ids){ delete paineis[id]; await apagar("painel:" + id); }
+  ordem = ordem.filter(id => paineis[id]);
+  if (!ordem.length){ const p = novoPainel(); paineis[p.id] = p; ordem.push(p.id); }
+  estado = paineis[ordem[ordem.length - 1]];
+  await salvarTudo(false);
+  mostrarPainel();
   irPara(0);
+}
+$("#btn-limpar").onclick = () => {
+  const tag = (estado.painel.tag || "").trim() || "(sem TAG)";
+  const aviso = painelUsado(estado) && !estado.gerado_em
+      ? "\n\nAtenção: o arquivo deste painel ainda não foi gerado." : "";
+  if (!confirm("Excluir o painel " + tag + " do aparelho? O checklist continua carregado."
+               + aviso)) return;
+  excluirPaineis([estado.id]);
+};
+$("#btn-limpar-todos").onclick = () => {
+  const pend = ordem.filter(id => painelUsado(paineis[id]) && !paineis[id].gerado_em).length;
+  if (!confirm("Excluir os " + ordem.length + " painéis do aparelho? O checklist continua carregado."
+               + (pend ? "\n\nAtenção: " + pend + " painel(is) ainda sem arquivo gerado." : "")))
+    return;
+  excluirPaineis([...ordem]);
 };
 
 /* ---- instalacao como aplicativo ----
@@ -761,18 +952,29 @@ window.addEventListener("appinstalled", () => {
                  + "esta aba antes de gerar e salvar o arquivo do painel.";
     document.querySelector("main").prepend(av);
   }
-  const e = await ler("estado");
-  if (e) estado = Object.assign({painel:{},respostas:{},ident:{},fotos:{}}, e);
+  const indice = await ler("indice");
+  if (indice && Array.isArray(indice.ordem)){
+    for (const id of indice.ordem){
+      const p = await ler("painel:" + id);
+      if (p){ paineis[id] = completar(p); ordem.push(id); }
+    }
+  }else{
+    // Versao anterior: um unico painel, guardado na chave "estado"
+    const antigo = await ler("estado");
+    if (antigo){
+      const p = completar(Object.assign({}, antigo, {id:novoPainel().id}));
+      paineis[p.id] = p; ordem.push(p.id);
+    }
+  }
+  if (!ordem.length){ const p = novoPainel(); paineis[p.id] = p; ordem.push(p.id); }
+  estado = paineis[indice && paineis[indice.atual] ? indice.atual : ordem[ordem.length - 1]];
+  if (!estado.painel.data) estado.painel.data = new Date().toISOString().slice(0,10);
+  await salvarTudo(false);
+  if (!indice) await apagar("estado");      // migrado para "painel:<id>"
+
   const c = await ler("checklist");
   if (c) { checklist = c; aplicarChecklist(); }
-  CAMPOS.forEach(id => { if (estado.painel[id]) document.getElementById(id).value = estado.painel[id]; });
-  if (!estado.painel.data) {
-    const hoje = new Date().toISOString().slice(0,10);
-    document.getElementById("data").value = hoje;
-    estado.painel.data = hoje;
-  }
-  montarIdent();
-  atualizarProgresso();
+  mostrarPainel();
 })();
 </script>
 </body>

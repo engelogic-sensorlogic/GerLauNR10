@@ -366,10 +366,8 @@ class ConfiguracoesWidget(QWidget):
         from ui.celular_widget import CelularWidget
         self.w_celular = CelularWidget()
         tabs.addTab(self.w_celular, "📱  Celular / Tablet")
-        # Recarrega as listas de clientes/laudos ao entrar na aba: elas podem
-        # ter mudado em outra tela desde que a janela foi aberta.
-        tabs.currentChanged.connect(
-            lambda i: self.w_backup.recarregar() if tabs.widget(i) is self.w_backup else None)
+        # As listas de clientes/laudos da aba Backup se recarregam sozinhas
+        # (BackupWidget.showEvent) sempre que a aba fica visivel.
 
         layout.addWidget(tabs)
 

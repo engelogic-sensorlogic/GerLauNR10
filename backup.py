@@ -496,6 +496,26 @@ def conflito_painel(arquivo: str, laudo_id: int) -> dict:
     }
 
 
+def conflito_paineis(arquivo: str, laudo_id: int) -> list:
+    """Paineis de um pacote "paineis" cuja TAG ja existe no laudo.
+
+    Devolve [(tag, nº form do painel existente), ...]; lista vazia = sem colisao.
+    O Nº Form nao entra na conta: o aplicativo de campo nao numera os paineis
+    e o PC atribui os numeros livres na importacao.
+    """
+    manifest = ler_manifest(arquivo)
+    if manifest.get("tipo") != "paineis":
+        raise BackupErro("Este pacote e do tipo '%s'." % manifest.get("tipo"))
+    with zipfile.ZipFile(arquivo) as zf:
+        lista = json.loads(zf.read("dados.json").decode("utf-8")).get("paineis") or []
+    repetidos = []
+    for pdados in lista:
+        anterior = painel_existente_por_tag(laudo_id, pdados.get("tag") or "")
+        if anterior is not None:
+            repetidos.append((pdados.get("tag"), anterior.get("formulario_num")))
+    return repetidos
+
+
 def conflito_cliente(arquivo: str, cliente_id_destino: int) -> list:
     """Numeros de laudo do pacote que ja existem no cliente de destino."""
     manifest = ler_manifest(arquivo)
@@ -637,4 +657,30 @@ def importar_painel(arquivo: str, laudo_id: int, modo: str = "novo") -> dict:
         dados = json.loads(zf.read("dados.json").decode("utf-8"))
         _importar_painel_dict(dados.get("painel") or {}, laudo_id, zf,
                               _mapa_descricoes(), relatorio, modo=modo)
+    return relatorio
+
+
+def importar_paineis(arquivo: str, laudo_id: int, modo: str = "novo") -> dict:
+    """Importa um pacote com varios paineis (gerado pelo aplicativo de campo)
+    para dentro de um laudo existente.
+
+    modo="novo"        cada painel entra com o proximo Nº Form livre do laudo
+    modo="substituir"  os paineis de mesma TAG sao removidos e os novos tomam o lugar
+    """
+    manifest = ler_manifest(arquivo)
+    if manifest.get("tipo") != "paineis":
+        raise BackupErro("Este pacote e do tipo '%s'. Use a importacao correspondente."
+                         % manifest.get("tipo"))
+    if not db.buscar_laudo(laudo_id):
+        raise BackupErro("Laudo de destino nao encontrado.")
+
+    relatorio = _novo_relatorio()
+    opcoes = _mapa_descricoes()
+    with zipfile.ZipFile(arquivo) as zf:
+        dados = json.loads(zf.read("dados.json").decode("utf-8"))
+        # Um unico conjunto de numeros, para os paineis do pacote nao colidirem
+        # entre si nem com os do laudo.
+        usados = _formularios_usados(laudo_id)
+        for pdados in dados.get("paineis") or []:
+            _importar_painel_dict(pdados, laudo_id, zf, opcoes, relatorio, usados, modo)
     return relatorio

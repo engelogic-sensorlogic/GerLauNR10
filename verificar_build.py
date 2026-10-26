@@ -31,6 +31,7 @@ ARQUIVOS = [
     ("GerLauNR10.exe",                          "executavel principal",       True),
     ("_internal/Icone.ico",                     "icone da aplicacao",         True),
     ("_internal/resources/logo_engelogic.png",  "logo da Engelogic",          True),
+    ("_internal/resources/logo_sensorlogic.png", "logo da Sensorlogic",       True),
     ("_internal/campo/GerLauNR10_Campo.html",   "aplicativo de campo",        True),
     ("_internal/PyQt6",                         "PyQt6 (interface)",          True),
     ("_internal/PIL",                           "Pillow (imagens)",           True),

@@ -7,7 +7,7 @@ from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox,
     QRadioButton, QButtonGroup, QFileDialog, QMessageBox, QGroupBox,
-    QTextEdit, QProgressBar, QFormLayout
+    QTextEdit, QProgressBar, QFormLayout, QCompleter
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
@@ -33,6 +33,44 @@ def _ajustar_botoes(caixa: QMessageBox):
         # 18px de padding em cada lado, mais folga para variacoes de fonte e
         # de escalonamento de tela (125%/150%), onde a sobra some rapido.
         botao.setMinimumWidth(largura + 56)
+
+
+def _combo_pesquisavel() -> QComboBox:
+    """QComboBox que tambem aceita digitar parte do texto para filtrar a lista.
+
+    O texto digitado nunca vira um item novo: ao sair do campo sem escolher
+    uma sugestao, o combo volta a mostrar o item que esta de fato selecionado.
+    """
+    combo = QComboBox()
+    combo.setEditable(True)
+    combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+    completer = combo.completer()
+    completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+    completer.setFilterMode(Qt.MatchFlag.MatchContains)
+    completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+
+    def _restaurar():
+        if combo.currentIndex() >= 0 and combo.currentText() != combo.itemText(combo.currentIndex()):
+            combo.setEditText(combo.itemText(combo.currentIndex()))
+    combo.lineEdit().editingFinished.connect(_restaurar)
+    return combo
+
+
+def _repovoar(combo: QComboBox, itens):
+    """Substitui os itens (rotulo, id) mantendo selecionado o mesmo id, se ainda
+    existir. Os sinais ficam bloqueados; quem chama dispara a cascata."""
+    atual = combo.currentData()
+    combo.blockSignals(True)
+    combo.clear()
+    for rotulo, ident in itens:
+        combo.addItem(rotulo, ident)
+    indice = combo.findData(atual) if atual is not None else -1
+    combo.setCurrentIndex(indice if indice >= 0 else (0 if combo.count() else -1))
+    combo.blockSignals(False)
+
+
+def _rotulo_laudo(l: dict) -> str:
+    return l.get("numero") or l.get("titulo") or "Laudo"
 
 
 class _Tarefa(QThread):
@@ -120,11 +158,11 @@ class BackupWidget(QWidget):
 
         form = QFormLayout()
         form.setSpacing(6)
-        self.cb_cliente = QComboBox()
+        self.cb_cliente = _combo_pesquisavel()
         self.cb_cliente.currentIndexChanged.connect(self._carregar_laudos)
-        self.cb_laudo = QComboBox()
+        self.cb_laudo = _combo_pesquisavel()
         self.cb_laudo.currentIndexChanged.connect(self._carregar_paineis)
-        self.cb_painel = QComboBox()
+        self.cb_painel = _combo_pesquisavel()
         form.addRow("Cliente:", self.cb_cliente)
         self.lbl_laudo = QLabel("Laudo:")
         self.lbl_painel = QLabel("Painel:")
@@ -188,9 +226,9 @@ class BackupWidget(QWidget):
 
         dform = QFormLayout()
         dform.setSpacing(6)
-        self.cb_cliente_dest = QComboBox()
+        self.cb_cliente_dest = _combo_pesquisavel()
         self.cb_cliente_dest.currentIndexChanged.connect(self._carregar_laudos_destino)
-        self.cb_laudo_dest = QComboBox()
+        self.cb_laudo_dest = _combo_pesquisavel()
         dform.addRow("Cliente:", self.cb_cliente_dest)
         self.lbl_laudo_dest = QLabel("Laudo:")
         dform.addRow(self.lbl_laudo_dest, self.cb_laudo_dest)
@@ -207,46 +245,39 @@ class BackupWidget(QWidget):
         return cx
 
     # ── Carga dos combos ──────────────────────────────────────────────────
+    def showEvent(self, evento):
+        # Recarrega sempre que a aba fica visivel -- tanto ao trocar de sub-aba
+        # quanto ao voltar para Configuracoes pelo menu lateral. Clientes,
+        # laudos (numero, titulo) e paineis podem ter mudado em outra tela.
+        super().showEvent(evento)
+        self.recarregar()
+
     def recarregar(self):
-        """Recarrega as listas de clientes. Chamado ao abrir a aba."""
+        """Recarrega clientes, laudos e paineis, preservando a selecao atual."""
+        clientes = [(c["razao_social"], c["id"]) for c in db.listar_clientes()]
         for combo in (self.cb_cliente, self.cb_cliente_dest):
-            atual = combo.currentData()
-            combo.blockSignals(True)
-            combo.clear()
-            for c in db.listar_clientes():
-                combo.addItem(c["razao_social"], c["id"])
-            indice = combo.findData(atual)
-            if indice >= 0:
-                combo.setCurrentIndex(indice)
-            combo.blockSignals(False)
+            _repovoar(combo, clientes)
         self._carregar_laudos()
         self._carregar_laudos_destino()
         self._atualizar_escopo()
 
     def _carregar_laudos(self):
-        self.cb_laudo.blockSignals(True)
-        self.cb_laudo.clear()
         cid = self.cb_cliente.currentData()
-        if cid:
-            for l in db.listar_laudos(cid):
-                self.cb_laudo.addItem(l.get("numero") or l.get("titulo") or "Laudo", l["id"])
-        self.cb_laudo.blockSignals(False)
+        laudos = db.listar_laudos(cid) if cid else []
+        _repovoar(self.cb_laudo, [(_rotulo_laudo(l), l["id"]) for l in laudos])
         self._carregar_paineis()
 
     def _carregar_paineis(self):
-        self.cb_painel.clear()
         lid = self.cb_laudo.currentData()
-        if lid:
-            for p in db.listar_paineis(lid):
-                rotulo = "%s  (%s)" % (p.get("tag") or "sem TAG", p.get("setor") or "—")
-                self.cb_painel.addItem(rotulo, p["id"])
+        paineis = db.listar_paineis(lid) if lid else []
+        _repovoar(self.cb_painel, [
+            ("%s  (%s)" % (p.get("tag") or "sem TAG", p.get("setor") or "—"), p["id"])
+            for p in paineis])
 
     def _carregar_laudos_destino(self):
-        self.cb_laudo_dest.clear()
         cid = self.cb_cliente_dest.currentData()
-        if cid:
-            for l in db.listar_laudos(cid):
-                self.cb_laudo_dest.addItem(l.get("numero") or l.get("titulo") or "Laudo", l["id"])
+        laudos = db.listar_laudos(cid) if cid else []
+        _repovoar(self.cb_laudo_dest, [(_rotulo_laudo(l), l["id"]) for l in laudos])
 
     def _atualizar_escopo(self):
         por_painel = self.rb_painel.isChecked()
@@ -257,7 +288,7 @@ class BackupWidget(QWidget):
         if not self._manifest:
             return
         tipo = self._manifest.get("tipo")
-        if tipo == "painel":
+        if tipo in ("painel", "paineis"):
             # Um painel precisa obrigatoriamente de um laudo existente
             self.cb_cliente_dest.setVisible(True)
             self.lbl_laudo_dest.setVisible(True)
@@ -393,6 +424,14 @@ class BackupWidget(QWidget):
                             resumo.get("paineis", 0)))
             self.rb_novo.setVisible(True)
             self.rb_existente.setVisible(True)
+        elif tipo == "paineis":
+            tags = resumo.get("tags") or []
+            lista = ", ".join(tags[:8]) + (" ..." if len(tags) > 8 else "")
+            descricao = ("Painéis: <b>%s</b><br>%s<br>%s avaliações"
+                         % (resumo.get("paineis", len(tags)), lista or "—",
+                            resumo.get("avaliacoes", 0)))
+            self.rb_novo.setVisible(False)
+            self.rb_existente.setVisible(False)
         else:
             descricao = ("Painel: <b>%s</b><br>Origem: %s<br>%s avaliações"
                          % (resumo.get("painel", "—"), resumo.get("cliente", "—"),
@@ -458,6 +497,34 @@ class BackupWidget(QWidget):
             "Criar novo (Nº Form %s)" % conf.get("formulario_sugerido"),
             "Substituir o existente")
 
+    def _resolver_conflito_paineis(self, laudo_id: int, alvo: str):
+        """Decide o modo de importacao de um pacote com varios paineis.
+        None = cancelar."""
+        try:
+            repetidos = backup.conflito_paineis(self._arquivo_import, laudo_id)
+        except backup.BackupErro as e:
+            QMessageBox.critical(self, "Falha ao ler o pacote", str(e))
+            return None
+
+        qtd = self._manifest.get("resumo", {}).get("paineis", "?")
+        if not repetidos:
+            if QMessageBox.question(
+                    self, "Confirmar importação",
+                    "Importar %s painéis para:\n\n%s" % (qtd, alvo)
+            ) != QMessageBox.StandardButton.Yes:
+                return None
+            return "novo"
+
+        lista = "\n".join("  • %s (Nº Form %s)" % (t, f) for t, f in repetidos[:8])
+        if len(repetidos) > 8:
+            lista += "\n  ... e mais %d." % (len(repetidos) - 8)
+        return self._perguntar(
+            "Painéis já existentes",
+            "%d dos %s painéis do pacote já existem neste laudo (mesma TAG):\n\n%s\n\n"
+            "Destino: %s\n\nOs demais entram como novos nos dois casos."
+            % (len(repetidos), qtd, lista, alvo),
+            "Criar novos (renumerando)", "Substituir os existentes")
+
     def _resolver_conflito_cliente(self, destino_id, alvo: str):
         """Decide o modo de importacao de um cliente. None = cancelar."""
         cliente = self._manifest.get("resumo", {}).get("cliente", "—")
@@ -492,25 +559,30 @@ class BackupWidget(QWidget):
             return
         tipo = self._manifest.get("tipo")
 
-        if tipo == "painel":
+        if tipo in ("painel", "paineis"):
             laudo_id = self.cb_laudo_dest.currentData()
             if not laudo_id:
                 QMessageBox.warning(
                     self, "Importar",
-                    "Escolha o cliente e o laudo que vão receber este painel.\n\n"
-                    "Se o cliente ainda não tem laudo, crie um na tela de Laudos.")
+                    "Escolha o cliente e o laudo que vão receber %s.\n\n"
+                    "Se o cliente ainda não tem laudo, crie um na tela de Laudos."
+                    % ("este painel" if tipo == "painel" else "estes painéis"))
                 return
             alvo = "%s / %s" % (self.cb_cliente_dest.currentText(),
                                 self.cb_laudo_dest.currentText())
 
-            modo = self._resolver_conflito_painel(laudo_id, alvo)
+            if tipo == "painel":
+                modo = self._resolver_conflito_painel(laudo_id, alvo)
+                funcao, descricao = backup.importar_painel, "painel"
+            else:
+                modo = self._resolver_conflito_paineis(laudo_id, alvo)
+                funcao, descricao = backup.importar_paineis, "painéis"
             if modo is None:
                 return
             self._ocupado(True)
-            self._log("Importando painel para %s (modo: %s) ..."
-                      % (alvo, "substituir" if modo == "substituir" else "criar novo"))
-            self._tarefa = _Tarefa(backup.importar_painel, self._arquivo_import,
-                                   laudo_id, modo)
+            self._log("Importando %s para %s (modo: %s) ..."
+                      % (descricao, alvo, "substituir" if modo == "substituir" else "criar novo"))
+            self._tarefa = _Tarefa(funcao, self._arquivo_import, laudo_id, modo)
         else:
             destino_id = None
             if self.rb_existente.isChecked():
