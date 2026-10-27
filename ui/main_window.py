@@ -157,7 +157,7 @@ class MainWindow(QMainWindow):
         sb_layout.addStretch()
 
         # Versão
-        ver_lbl = QLabel("  v1.1.0  |  © Engelogic")
+        ver_lbl = QLabel("  v1.1.1  |  © Engelogic")
         ver_lbl.setStyleSheet("color: #4a6580; font-size: 10px; padding: 8px 16px;")
         sb_layout.addWidget(ver_lbl)
 
