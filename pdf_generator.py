@@ -759,11 +759,17 @@ def gerar_laudo_pdf(
 
             # Participantes
             participantes = db.participantes_do_laudo(laudo_id)
-            if participantes:
-                add_subsection("1.3", "Fornecedores de Informações")
+            # O 1.3 sempre consta do sumario: sem fornecedores indicados, a
+            # secao fica com um aviso em vez de sumir.
+            add_subsection("1.3", "Fornecedores de Informações")
+            if not participantes:
+                story.append(Paragraph(
+                    "Não houve fornecedor de informações indicado para este laudo.",
+                    styles["obs"]))
+            else:
                 part_data = [["Nome", "Empresa", "Cargo/Setor", "Contato"]]
                 for p in participantes:
-                    contato = p.get("email","") or p.get("telefone","") or "—"
+                    contato = "<br/>".join(x for x in (p.get("telefone"), p.get("email")) if x) or "—"
                     cargo_setor = "%s  /  %s" % (p.get("cargo",""), p.get("setor","")) if p.get("cargo") else p.get("setor","—")
                     part_data.append([
                         Paragraph(p.get("nome","—"), styles["cell"]),

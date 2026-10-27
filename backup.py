@@ -628,7 +628,16 @@ def importar_cliente(arquivo: str, cliente_id_destino: int = None,
                     por_nome[prof.get("nome")] = pid
                 db.vincular_profissional_laudo(laudo_id, pid)
 
-            db.sincronizar_participantes_laudo(laudo_id)
+            # Pacotes trazem, por laudo, o nome dos fornecedores indicados nele.
+            # Pacotes antigos nao trazem: ai todos os do cliente sao vinculados,
+            # como era antes.
+            if "participantes" in laudo:
+                por_nome_part = {p["nome"]: p["id"] for p in db.listar_participantes(cliente_id)}
+                for nome in laudo.get("participantes") or []:
+                    if nome in por_nome_part:
+                        db.vincular_participante_laudo(laudo_id, por_nome_part[nome])
+            else:
+                db.sincronizar_participantes_laudo(laudo_id)
 
             # Um unico conjunto de numeros por laudo, para que os paineis do
             # pacote tambem nao colidam entre si.

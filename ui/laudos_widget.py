@@ -25,7 +25,7 @@ class LaudoDialog(QDialog):
         self.cliente_id = cliente_id
         self.dados = dados or {}
         self.setWindowTitle("Novo Laudo" if not dados else "Editar Laudo")
-        self.setMinimumWidth(680)
+        self.setMinimumWidth(980)
         self.setModal(True)
         self._build_ui()
 
@@ -74,6 +74,7 @@ class LaudoDialog(QDialog):
         prof_header = QHBoxLayout()
         prof_lbl = QLabel("Selecione os profissionais vinculados a este laudo:")
         prof_lbl.setStyleSheet("font-size: 11px; color: #586069;")
+        prof_lbl.setWordWrap(True)
         btn_novo_prof = QPushButton("+ Cadastrar Novo")
         btn_novo_prof.setObjectName("btn_secondary")
         btn_novo_prof.setFixedWidth(140)
@@ -84,9 +85,33 @@ class LaudoDialog(QDialog):
         grp_layout.addLayout(prof_header)
 
         self.list_prof = QListWidget()
-        self.list_prof.setFixedHeight(120)
+        self.list_prof.setFixedHeight(130)
         grp_layout.addWidget(self.list_prof)
-        layout.addWidget(grp_prof)
+
+        # Fornecedores de informacoes (item 1.3 do PDF): nenhum, um ou varios
+        grp_part = QGroupBox("Fornecedores de Informações (colaboradores do cliente)")
+        part_layout = QVBoxLayout(grp_part)
+        part_header = QHBoxLayout()
+        part_lbl = QLabel("Marque quem forneceu informações para este laudo (pode ser nenhum):")
+        part_lbl.setStyleSheet("font-size: 11px; color: #586069;")
+        part_lbl.setWordWrap(True)
+        btn_part = QPushButton("+ Cadastrar / Editar")
+        btn_part.setObjectName("btn_secondary")
+        btn_part.setFixedWidth(160)
+        btn_part.clicked.connect(self._gerenciar_participantes)
+        part_header.addWidget(part_lbl)
+        part_header.addStretch()
+        part_header.addWidget(btn_part)
+        part_layout.addLayout(part_header)
+        self.list_part = QListWidget()
+        self.list_part.setFixedHeight(130)
+        part_layout.addWidget(self.list_part)
+        # Lado a lado: empilhados, a janela passava da altura de telas de notebook
+        grupos = QHBoxLayout()
+        grupos.setSpacing(12)
+        grupos.addWidget(grp_prof, 1)
+        grupos.addWidget(grp_part, 1)
+        layout.addLayout(grupos)
 
         # ART
         art_row = QHBoxLayout()
@@ -102,6 +127,7 @@ class LaudoDialog(QDialog):
         # Preenchimento
         self._fill_fields()
         self._load_profissionais()
+        self._load_participantes()
 
         # Botões
         btn_row = QHBoxLayout()
@@ -152,6 +178,47 @@ class LaudoDialog(QDialog):
             )
             self.list_prof.addItem(item)
 
+    def _load_participantes(self, marcados: set = None):
+        """Lista os colaboradores do cliente. Laudo novo: todos vem marcados;
+        laudo existente: os que ja estao no laudo."""
+        if marcados is None:
+            if self.dados.get("id"):
+                marcados = {p["id"] for p in db.participantes_do_laudo(self.dados["id"])}
+            else:
+                marcados = {p["id"] for p in db.listar_participantes(self.cliente_id)}
+        self.list_part.clear()
+        partes = db.listar_participantes(self.cliente_id)
+        for p in partes:
+            detalhe = "  |  ".join(x for x in (p.get("cargo"), p.get("setor")) if x)
+            item = QListWidgetItem(p["nome"] + ("  —  " + detalhe if detalhe else ""))
+            item.setData(Qt.ItemDataRole.UserRole, p["id"])
+            item.setCheckState(Qt.CheckState.Checked if p["id"] in marcados
+                               else Qt.CheckState.Unchecked)
+            self.list_part.addItem(item)
+        if not partes:
+            vazio = QListWidgetItem("Nenhum colaborador cadastrado para este cliente. "
+                                    "Use \"+ Cadastrar / Editar\".")
+            vazio.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.list_part.addItem(vazio)
+
+    def _participantes_marcados(self) -> list:
+        ids = []
+        for i in range(self.list_part.count()):
+            item = self.list_part.item(i)
+            pid = item.data(Qt.ItemDataRole.UserRole)
+            if pid is not None and item.checkState() == Qt.CheckState.Checked:
+                ids.append(pid)
+        return ids
+
+    def _gerenciar_participantes(self):
+        from ui.clientes_widget import ParticipantesDialog
+        antes = {p["id"] for p in db.listar_participantes(self.cliente_id)}
+        marcados = set(self._participantes_marcados())
+        ParticipantesDialog(self.cliente_id, parent=self).exec()
+        # Quem acabou de ser cadastrado ja entra marcado neste laudo
+        novos = {p["id"] for p in db.listar_participantes(self.cliente_id)} - antes
+        self._load_participantes(marcados | novos)
+
     def _new_profissional(self):
         from ui.configuracoes_widget import ProfissionalDialog
         dlg = ProfissionalDialog(parent=self)
@@ -189,6 +256,7 @@ class LaudoDialog(QDialog):
             item = self.list_prof.item(i)
             if item.checkState() == Qt.CheckState.Checked:
                 self.prof_ids_selecionados.append(item.data(Qt.ItemDataRole.UserRole))
+        self.part_ids_selecionados = self._participantes_marcados()
         self.accept()
 
 
@@ -662,7 +730,8 @@ class LaudosWidget(QWidget):
             lid = db.salvar_laudo(dlg.result_data)
             for pid in dlg.prof_ids_selecionados:
                 db.vincular_profissional_laudo(lid, pid)
-            db.sincronizar_participantes_laudo(lid)
+            for pid in dlg.part_ids_selecionados:
+                db.vincular_participante_laudo(lid, pid)
             self._load_laudos()
 
     def _edit_laudo(self):
@@ -677,7 +746,11 @@ class LaudosWidget(QWidget):
                 db.desvincular_profissional_laudo(dados["id"], p["id"])
             for pid in dlg.prof_ids_selecionados:
                 db.vincular_profissional_laudo(dados["id"], pid)
-            db.sincronizar_participantes_laudo(dados["id"])
+            # O laudo fica exatamente com os fornecedores marcados (ou nenhum)
+            for p in db.participantes_do_laudo(dados["id"]):
+                db.desvincular_participante_laudo(dados["id"], p["id"])
+            for pid in dlg.part_ids_selecionados:
+                db.vincular_participante_laudo(dados["id"], pid)
             self._load_laudos()
 
     def _delete_laudo(self):

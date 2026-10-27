@@ -156,12 +156,21 @@ class ClienteDialog(QDialog):
 # Diálogo de participantes
 # ---------------------------------------------------------------------------
 class ParticipantesDialog(QDialog):
+    """Cadastro dos colaboradores do cliente que fornecem informacoes para os
+    laudos (item 1.3 do PDF). Quais deles entram em cada laudo e escolhido no
+    cadastro do laudo."""
+
+    _CAMPOS = ["nome", "cargo", "setor", "telefone", "email", "empresa"]
+
     def __init__(self, cliente_id: int, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Participantes / Fornecedores de Informações")
-        self.setMinimumSize(700, 500)
+        self.setWindowTitle("Fornecedores de Informações")
+        self.setMinimumSize(760, 500)
         self.setModal(True)
         self.cliente_id = cliente_id
+        cliente = db.buscar_cliente(cliente_id) or {}
+        self._empresa_padrao = cliente.get("razao_social", "") or ""
+        self._editando_id = None
         self._build_ui()
         self._refresh()
 
@@ -169,21 +178,23 @@ class ParticipantesDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
 
-        title = QLabel("Participantes / Fornecedores de Informações")
+        title = QLabel("Fornecedores de Informações")
         title.setObjectName("section_title")
         layout.addWidget(title)
 
-        info = QLabel("Pessoas envolvidas no projeto que forneceram informações para o laudo.")
+        info = QLabel("Colaboradores do cliente que passam as informações necessárias para o "
+                      "laudo. Dê dois cliques em uma linha para editar.")
         info.setStyleSheet("color: #586069; font-size: 11px;")
         layout.addWidget(info)
 
         # Tabela
         self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["Nome", "Empresa", "Cargo", "Setor", "E-mail", "Telefone"])
+        self.table.setHorizontalHeaderLabels(["Nome", "Cargo", "Setor", "Telefone", "E-mail", "Empresa"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
+        self.table.cellDoubleClicked.connect(lambda row, _c: self._editar(row))
         layout.addWidget(self.table)
 
         # Formulário para adicionar
@@ -192,30 +203,40 @@ class ParticipantesDialog(QDialog):
         form_frame.setFrameShape(QFrame.Shape.StyledPanel)
         form_layout = QVBoxLayout(form_frame)
 
-        form_lbl = QLabel("Adicionar Participante")
+        self.form_lbl = form_lbl = QLabel("Adicionar Fornecedor de Informações")
         form_lbl.setObjectName("card_title")
         form_lbl.setStyleSheet(f"color: {COLORS['primary']}; font-weight: bold;")
         form_layout.addWidget(form_lbl)
 
         grid = QHBoxLayout()
-        self.e_nome = QLineEdit(); self.e_nome.setPlaceholderText("Nome *")
-        self.e_empresa = QLineEdit(); self.e_empresa.setPlaceholderText("Empresa")
+        self.e_nome = QLineEdit(); self.e_nome.setPlaceholderText("Nome do colaborador *")
         self.e_cargo = QLineEdit(); self.e_cargo.setPlaceholderText("Cargo")
         self.e_setor = QLineEdit(); self.e_setor.setPlaceholderText("Setor")
-        self.e_email = QLineEdit(); self.e_email.setPlaceholderText("E-mail")
         self.e_telefone = QLineEdit(); self.e_telefone.setPlaceholderText("Telefone")
-        for w in [self.e_nome, self.e_empresa, self.e_cargo, self.e_setor, self.e_email, self.e_telefone]:
+        self.e_email = QLineEdit(); self.e_email.setPlaceholderText("E-mail")
+        self.e_empresa = QLineEdit(); self.e_empresa.setPlaceholderText("Empresa")
+        self.e_empresa.setText(self._empresa_padrao)
+        for w in self._campos():
             grid.addWidget(w)
         form_layout.addLayout(grid)
 
         btn_row = QHBoxLayout()
-        btn_add = QPushButton("+ Adicionar")
+        self.btn_add = btn_add = QPushButton("+ Adicionar")
         btn_add.setObjectName("btn_success")
         btn_add.clicked.connect(self._add)
+        btn_edit = QPushButton("Editar Selecionado")
+        btn_edit.setObjectName("btn_secondary")
+        btn_edit.clicked.connect(lambda: self._editar(self.table.currentRow()))
+        self.btn_cancel_edit = QPushButton("Cancelar edição")
+        self.btn_cancel_edit.setObjectName("btn_secondary")
+        self.btn_cancel_edit.clicked.connect(self._limpar_form)
+        self.btn_cancel_edit.setVisible(False)
         btn_del = QPushButton("Remover Selecionado")
         btn_del.setObjectName("btn_danger")
         btn_del.clicked.connect(self._delete)
         btn_row.addWidget(btn_add)
+        btn_row.addWidget(btn_edit)
+        btn_row.addWidget(self.btn_cancel_edit)
         btn_row.addWidget(btn_del)
         btn_row.addStretch()
         form_layout.addLayout(btn_row)
@@ -226,42 +247,68 @@ class ParticipantesDialog(QDialog):
         btn_close.clicked.connect(self.accept)
         layout.addWidget(btn_close, alignment=Qt.AlignmentFlag.AlignRight)
 
+    def _campos(self):
+        return [self.e_nome, self.e_cargo, self.e_setor, self.e_telefone,
+                self.e_email, self.e_empresa]
+
     def _refresh(self):
         self.table.setRowCount(0)
         self._parts = db.listar_participantes(self.cliente_id)
         for p in self._parts:
             row = self.table.rowCount()
             self.table.insertRow(row)
-            for col, key in enumerate(["nome", "empresa", "cargo", "setor", "email", "telefone"]):
+            for col, key in enumerate(self._CAMPOS):
                 self.table.setItem(row, col, QTableWidgetItem(p.get(key, "") or ""))
+
+    def _limpar_form(self):
+        for w in self._campos():
+            w.clear()
+        self.e_empresa.setText(self._empresa_padrao)
+        self._editando_id = None
+        self.form_lbl.setText("Adicionar Fornecedor de Informações")
+        self.btn_add.setText("+ Adicionar")
+        self.btn_cancel_edit.setVisible(False)
+
+    def _editar(self, row: int):
+        if row < 0 or row >= len(self._parts):
+            return
+        p = self._parts[row]
+        for w, key in zip(self._campos(), self._CAMPOS):
+            w.setText(p.get(key, "") or "")
+        self._editando_id = p["id"]
+        self.form_lbl.setText("Editando: %s" % (p.get("nome") or ""))
+        self.btn_add.setText("Salvar alterações")
+        self.btn_cancel_edit.setVisible(True)
+        self.e_nome.setFocus()
 
     def _add(self):
         nome = self.e_nome.text().strip()
         if not nome:
-            QMessageBox.warning(self, "Campo obrigatório", "Informe o Nome.")
+            QMessageBox.warning(self, "Campo obrigatório", "Informe o Nome do colaborador.")
             return
-        db.salvar_participante({
-            "cliente_id": self.cliente_id,
-            "nome": nome,
-            "empresa": self.e_empresa.text().strip(),
-            "cargo": self.e_cargo.text().strip(),
-            "setor": self.e_setor.text().strip(),
-            "email": self.e_email.text().strip(),
-            "telefone": self.e_telefone.text().strip(),
-        })
-        for w in [self.e_nome, self.e_empresa, self.e_cargo, self.e_setor, self.e_email, self.e_telefone]:
-            w.clear()
+        dados = {key: w.text().strip() for w, key in zip(self._campos(), self._CAMPOS)}
+        dados["cliente_id"] = self.cliente_id
+        if self._editando_id:
+            dados["id"] = self._editando_id
+        db.salvar_participante(dados)
+        self._limpar_form()
         self._refresh()
 
     def _delete(self):
-        rows = self.table.selectedItems()
-        if not rows:
-            return
         row = self.table.currentRow()
-        if row < len(self._parts):
-            pid = self._parts[row]["id"]
-            db.excluir_participante(pid)
-            self._refresh()
+        if row < 0 or row >= len(self._parts):
+            return
+        p = self._parts[row]
+        if QMessageBox.question(
+                self, "Remover fornecedor",
+                "Remover '%s' do cadastro?\n\nEle sai também de todos os laudos em "
+                "que estiver indicado." % (p.get("nome") or "")
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        db.excluir_participante(p["id"])
+        if self._editando_id == p["id"]:
+            self._limpar_form()
+        self._refresh()
 
 
 # ---------------------------------------------------------------------------
@@ -351,7 +398,7 @@ class ClientesWidget(QWidget):
                       "Abrir Laudos deste Cliente",
                       lambda _, i=cid, n=cnome: self.open_laudos.emit(i, n))
             _icon_btn(QStyle.StandardPixmap.SP_MessageBoxInformation,
-                      "Gerenciar Participantes / Fornecedores de Informação",
+                      "Fornecedores de Informações (colaboradores do cliente)",
                       lambda _, i=cid: self._manage_participantes(i))
             _icon_btn(QStyle.StandardPixmap.SP_FileDialogNewFolder,
                       "Editar cliente",
