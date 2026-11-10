@@ -7,8 +7,9 @@
    de recorrer ao cache -- justamente onde o aplicativo precisa abrir na hora.
    Agora a pagina vem do cache imediatamente e, se houver rede, uma copia nova
    e baixada em silencio para a proxima abertura. */
-const CACHE = "nr10-campo-v11";
-const ARQUIVOS = ["./", "./index.html"];
+const CACHE = "nr10-campo-v12";
+const ARQUIVOS = ["./", "./index.html", "./manifest.webmanifest", "./icone-192.png",
+                  "./icone-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", ev => {
   ev.waitUntil(
@@ -19,7 +20,10 @@ self.addEventListener("install", ev => {
 self.addEventListener("activate", ev => {
   ev.waitUntil(
     caches.keys()
-      .then(chaves => Promise.all(chaves.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      // A origem do GitHub Pages e compartilhada com o GerEx: apaga so
+      // as versoes antigas do cache deste aplicativo.
+      .then(chaves => Promise.all(chaves.filter(k => k.startsWith("nr10-campo-") && k !== CACHE)
+                                        .map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

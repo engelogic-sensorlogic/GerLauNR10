@@ -838,7 +838,7 @@ def gerar_laudo_pdf(
                 story.append(Paragraph("Arquivo ART não encontrado: %s" % art_path, styles["obs"]))
 
         # ── RESUMO NR-10 ──────────────────────────────────────────────────────────
-        if opcoes.get("resumo_nr10", True):
+        if opcoes.get("nr10", True):
             prog(35, "Gerando resumo técnico NR-10...")
             story.append(PageBreak())
             add_section("3.", "RESUMO TÉCNICO DA NORMA REGULAMENTADORA NR-10")

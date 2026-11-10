@@ -130,6 +130,7 @@
   <button class="b-lar" id="btn-instalar" style="display:none;margin-bottom:12px">
     Instalar na tela inicial
   </button>
+  <div id="res-instalar"></div>
 
   <div class="card" id="cx-checklist">
     <h2>Checklist</h2>
@@ -855,12 +856,37 @@ $("#btn-gerar").onclick = () => gerarPacote([estado]);
 $("#btn-gerar-todos").onclick = () =>
   gerarPacote(ordem.map(id => paineis[id]).filter(painelUsado));
 
+// Caminho manual, para quando o navegador nao oferece a janela de instalacao
+// ou ela falha. O botao antes falhava em silencio nesses casos.
+function instrucaoManual(motivo){
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  $("#res-instalar").innerHTML = "<div class='aviso'>" + (motivo ? motivo + "<br><br>" : "")
+    + (ios
+        ? "No <b>Safari</b>, toque em <b>Compartilhar</b> &rsaquo; <b>Adicionar à Tela de Início</b>."
+        : "No <b>Chrome</b>, toque no menu <b>&#8942;</b> (três pontos, no canto superior direito) "
+          + "&rsaquo; <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.")
+    + "</div>";
+}
 $("#btn-instalar").onclick = async () => {
-  if (!promptInstalar) return;
-  promptInstalar.prompt();
-  await promptInstalar.userChoice;
-  promptInstalar = null;
-  $("#btn-instalar").style.display = "none";
+  if (!promptInstalar){
+    instrucaoManual("O navegador não liberou a instalação automática.");
+    return;
+  }
+  const ev = promptInstalar;
+  promptInstalar = null;          // cada pedido so pode ser usado uma vez
+  try {
+    await ev.prompt();
+    const r = await ev.userChoice;
+    if (r.outcome === "accepted"){
+      $("#btn-instalar").style.display = "none";
+      $("#res-instalar").innerHTML = "<div class='aviso ok'>Instalando. O ícone <b>NR10 Campo</b> "
+        + "aparece na tela inicial em alguns segundos.</div>";
+    } else {
+      instrucaoManual("Instalação cancelada.");
+    }
+  } catch(e){
+    instrucaoManual("A janela de instalação não abriu (" + escapar(e.message || String(e)) + ").");
+  }
 };
 
 $("#btn-atualizar").onclick = async () => {
@@ -877,8 +903,13 @@ $("#btn-atualizar").onclick = async () => {
     }
     // Os dados ficam em IndexedDB, que nao e tocado aqui: limpamos apenas o
     // cache do service worker (a pagina) e forcamos um registro novo.
-    for (const nome of await caches.keys()) await caches.delete(nome);
-    for (const reg of await navigator.serviceWorker.getRegistrations()) await reg.unregister();
+    // No GitHub Pages o GerLauNR10 divide a origem com o GerEx: so mexemos
+    // no cache e no registro deste aplicativo.
+    const escopo = new URL(".", location.href).href;
+    for (const nome of await caches.keys())
+      if (nome.startsWith("nr10-campo-")) await caches.delete(nome);
+    for (const reg of await navigator.serviceWorker.getRegistrations())
+      if (reg.scope === escopo) await reg.unregister();
     cx.innerHTML = "<div class='aviso ok'>Atualização baixada. Reabrindo…</div>";
     setTimeout(() => location.reload(true), 700);
   }catch(e){
@@ -934,6 +965,10 @@ window.addEventListener("appinstalled", () => {
   const b = document.getElementById("btn-instalar");
   if (b) b.style.display = "none";
 });
+// Sem o evento do Chrome (ou no iPhone) o botao mostra o caminho manual.
+if (!(matchMedia("(display-mode: standalone)").matches || navigator.standalone)){
+  document.getElementById("btn-instalar").style.display = "block";
+}
 
 /* ---- inicializacao ---- */
 (async () => {
